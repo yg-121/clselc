@@ -1,14 +1,38 @@
-function Input({ type, label, className = '', ...props }) {
-    return (
-      <div className="mb-4">
-        <label className="block text-gray-700 mb-2">{label}</label>
-        <input
-          type={type}
-          className={`w-full p-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500 ${className}`}
-          {...props}
-        />
-      </div>
-    );
-  }
-  
-  export default Input;
+function Input({
+  type = "text",
+  label,
+  name,
+  value,
+  onChange,
+  placeholder = "",
+  required = false,
+  min,
+  max,
+  step,
+  maxLength,
+  className = "",
+}) {
+  return (
+    <div className="mb-4">
+      <label htmlFor={name} className="block text-navy mb-2">
+        {label} {required && <span className="text-red-500">*</span>}
+      </label>
+      <input
+        type={type}
+        id={name}
+        name={name}
+        value={value}
+        onChange={onChange}
+        placeholder={placeholder}
+        required={required}
+        min={min}
+        max={max}
+        step={step}
+        maxLength={maxLength}
+        className={`w-full p-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-navy ${className}`}
+      />
+    </div>
+  )
+}
+
+export default Input

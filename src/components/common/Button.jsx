@@ -1,13 +1,16 @@
-function Button({ type = 'button', className = '', children, ...props }) {
-    return (
-      <button
-        type={type}
-        className={`bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 ${className}`}
-        {...props}
-      >
-        {children}
-      </button>
-    );
-  }
-  
-  export default Button;
+
+
+function Button({ children, className = "", type = "button", onClick, disabled = false }) {
+  return (
+    <button
+      type={type}
+      onClick={onClick}
+      disabled={disabled}
+      className={`bg-navy text-white rounded-md hover:bg-navy/90 px-4 py-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${className}`}
+    >
+      {children}
+    </button>
+  )
+}
+
+export default Button
