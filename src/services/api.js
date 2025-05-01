@@ -1,6 +1,7 @@
 import axios from "axios"
 
-const API_URL = "http://localhost:5000"
+// Use relative URL for API requests (will be proxied by Vite)
+const API_URL = ""
 
 const api = axios.create({
   baseURL: API_URL,
@@ -28,6 +29,18 @@ export const auth = {
   forgotPassword: (data) => api.post("/api/auth/forgot-password", data),
   resetPassword: (data) => api.post("/api/auth/reset-password", data),
   verify: () => api.get("/api/auth/verify"),
+}
+
+// Client endpoints
+export const client = {
+  getDashboard: () => api.get("/api/users/dashboard/client"),
+  getCases: (status) => api.get(`/api/cases${status ? `?status=${status}` : ""}`),
+  createCase: (data) =>
+    api.post("/api/cases", data, {
+      headers: { "Content-Type": "multipart/form-data" },
+    }),
+  getLawyers: (params) => api.get("/api/users/lawyers", { params }),
+  getNotifications: () => api.get("/api/notifications"),
 }
 
 export default api

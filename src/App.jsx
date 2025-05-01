@@ -1,66 +1,201 @@
-
-
-import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom"
-import { AuthProvider, useAuth } from "./context/AuthContext"
-import Navbar from "./components/layout/Navbar"
-import Footer from "./components/layout/Footer"
-import Login from "./pages/auth/Login"
-import Register from "./pages/auth/Register"
-import ForgotPassword from "./pages/auth/ForgotPassword"
-import ResetPassword from "./pages/auth/ResetPassword"
-import ClientDashboard from "./pages/dashboard/ClientDashboard"
-import LawyerDashboard from "./pages/dashboard/LawyerDashboard"
-import AdminDashboard from "./pages/dashboard/AdminDashboard"
+import {BrowserRouter as Router,Routes,Route,Navigate,useLocation,} from "react-router-dom";
+import { AuthProvider, useAuth } from "./context/AuthContext";
+import Navbar from "./components/layout/Navbar";
+import Footer from "./components/layout/Footer";
+import Login from "./pages/auth/Login";
+import Register from "./pages/auth/Register";
+import ForgotPassword from "./pages/auth/ForgotPassword";
+import ResetPassword from "./pages/auth/ResetPassword";
+import ClientHome from "./pages/client/ClientHome";
+import FindLawyers from "./pages/client/FindLawyer";
+import MyCases from "./pages/client/MyCases";
+import CaseDetails from "./pages/client/CaseDetails";
+import PostCase from "./pages/client/PostCases";
+import Notification from "./pages/client/Notifications";
+import AppointmentsPage from "./pages/common/Appointments";
+import LawyerHome from "./pages/lawyer/LawyerHome";
+import LawyerAllCases from "./pages/lawyer/LawyerAllCases";
+import LawyerCase from "./pages/lawyer/LawyerCase";
+import LawyerCaseDetails from "./pages/lawyer/LawyerCaseDetails";
+import MyBids from "./pages/lawyer/MyBids";
+import LawyerProfile from "./pages/lawyer/LawyerProfile";
+import AdminDashboard from "./pages/dashboard/AdminDashboard";
+import MessagesPage from "./pages/common/Messages";
 
 // Protected route component
 const ProtectedRoute = ({ children, allowedRoles }) => {
-  const { user, loading } = useAuth()
+  const { user, loading } = useAuth();
 
   if (loading) {
-    return <div className="flex justify-center items-center h-screen">Loading...</div>
+    return (
+      <div className="flex justify-center items-center h-screen">
+        Loading...
+      </div>
+    );
   }
 
   if (!user) {
-    return <Navigate to="/login" />
+    return <Navigate to="/login" />;
   }
 
   if (allowedRoles && !allowedRoles.includes(user.role)) {
-    return <Navigate to="/" />
+    return <Navigate to="/" />;
   }
 
-  return children
-}
+  return children;
+};
 
 function AppRoutes() {
+  const location = useLocation();
+  const authRoutes = [
+    "/login",
+    "/register",
+    "/forgot-password",
+    "/reset-password",
+  ];
+  const hideNavbarFooter = authRoutes.includes(location.pathname);
+
   return (
     <div className="flex flex-col min-h-screen">
-      <Navbar />
-      <main className="flex-grow">
+      {!hideNavbarFooter && <Navbar />}
+      <main className={hideNavbarFooter ? "" : "flex-grow"}>
         <Routes>
           <Route path="/" element={<Navigate to="/login" />} />
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
           <Route path="/forgot-password" element={<ForgotPassword />} />
           <Route path="/reset-password" element={<ResetPassword />} />
-
+          {/* Dashboard Routes */}
           <Route
-            path="/dashboard/client"
+            path="client/home"
             element={
               <ProtectedRoute allowedRoles={["Client"]}>
-                <ClientDashboard />
+                <ClientHome />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="client/lawyer"
+            element={
+              <ProtectedRoute allowedRoles={["Client"]}>
+                <FindLawyers />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="client/cases"
+            element={
+              <ProtectedRoute allowedRoles={["Client"]}>
+                <MyCases />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="client/cases/:id"
+            element={
+              <ProtectedRoute allowedRoles={["Client"]}>
+                <CaseDetails />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/client/cases/post"
+            element={
+              <ProtectedRoute allowedRoles={["Client"]}>
+                <PostCase />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/client/appointments"
+            element={
+              <ProtectedRoute allowedRoles={["Client"]}>
+                <AppointmentsPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/client/messages"
+            element={
+              <ProtectedRoute allowedRoles={["Client"]}>
+                <MessagesPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/client/notification"
+            element={
+              <ProtectedRoute allowedRoles={["Lawyer"]}>
+                <Notification />
+              </ProtectedRoute>
+            }
+          />
+          {/* Lawyer route */}
+          <Route
+            path="/lawyer/home"
+            element={
+              <ProtectedRoute allowedRoles={["Lawyer"]}>
+                <LawyerHome />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/lawyer/all-cases"
+            element={
+              <ProtectedRoute allowedRoles={["Lawyer"]}>
+                <LawyerAllCases />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/lawyer/all-cases/:id"
+            element={
+              <ProtectedRoute allowedRoles={["Lawyer"]}>
+                <LawyerCaseDetails />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/lawyer/lawyerCase"
+            element={
+              <ProtectedRoute allowedRoles={["Lawyer"]}>
+                <LawyerCase />
               </ProtectedRoute>
             }
           />
 
           <Route
-            path="/dashboard/lawyer"
+            path="/lawyer/bids"
             element={
               <ProtectedRoute allowedRoles={["Lawyer"]}>
-                <LawyerDashboard />
+                <MyBids />
               </ProtectedRoute>
             }
           />
-
+          <Route
+            path="/lawyer/appointments"
+            element={
+              <ProtectedRoute allowedRoles={["Lawyer"]}>
+                <AppointmentsPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/lawyer/messages"
+            element={
+              <ProtectedRoute allowedRoles={["Lawyer"]}>
+                <MessagesPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/lawyer/profile"
+            element={
+              <ProtectedRoute allowedRoles={["Lawyer"]}>
+                <LawyerProfile />
+              </ProtectedRoute>
+            }
+          />
           <Route
             path="/admin"
             element={
@@ -69,13 +204,12 @@ function AppRoutes() {
               </ProtectedRoute>
             }
           />
-
           <Route path="*" element={<Navigate to="/" />} />
         </Routes>
       </main>
-      <Footer />
+      {!hideNavbarFooter && <Footer />}
     </div>
-  )
+  );
 }
 
 function App() {
@@ -85,7 +219,7 @@ function App() {
         <AppRoutes />
       </AuthProvider>
     </Router>
-  )
+  );
 }
 
-export default App
+export default App;

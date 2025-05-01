@@ -1,4 +1,163 @@
-@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap");
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+:root {
+  --primary: 221 39% 11%; /* Equivalent to a dark blue, e.g., #1E3A8A */
+  --primary-foreground: 0 0% 100%; /* White */
+  --secondary: 210 40% 96%; /* Light gray */
+  --secondary-foreground: 222 47% 11%; /* Dark gray */
+  --background: 0 0% 100%; /* White */
+  --foreground: 222 47% 11%; /* Dark gray */
+  --card: 0 0% 100%; /* White */
+  --card-foreground: 222 47% 11%; /* Dark gray */
+  --muted: 210 40% 96%; /* Light gray */
+  --muted-foreground: 215 16% 47%; /* Medium gray */
+  --border: 214 32% 91%; /* Light border */
+  --radius: 0.75rem; /* Matches rounded-xl */
+  --font-sans: "Inter", sans-serif;
+}
+
+.dark {
+  --primary: 221 39% 11%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 222 47% 11%;
+  --secondary-foreground: 210 40% 96%;
+  --background: 222 47% 11%;
+  --foreground: 210 40% 96%;
+  --card: 222 47% 11%;
+  --card-foreground: 210 40% 96%;
+  --muted: 222 47% 11%;
+  --muted-foreground: 215 16% 47%;
+  --border: 222 47% 11%;
+}
+
+/* Rotating Border Effect */
+@keyframes rotateBorder {
+  0% {
+    background-position: 0% 50%;
+  }
+  100% {
+    background-position: 400% 50%;
+  }
+}
+
+.rotating-border {
+  position: relative;
+  overflow: hidden;
+}
+
+.rotating-border::before {
+  content: '';
+  position: absolute;
+  top: -2px;
+  left: -2px;
+  right: -2px;
+  bottom: -2px;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    hsl(var(--primary) / 0.5),
+    transparent,
+    transparent
+  );
+  background-size: 400%;
+  border-radius: var(--radius);
+  z-index: -1;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.rotating-border:hover::before {
+  opacity: 1;
+  animation: rotateBorder 3s linear infinite;
+}
+
+/* Animations */
+@keyframes fadeInScale {
+  0% {
+    opacity: 0;
+    transform: scale(0.8);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.fade-in-scale {
+  animation: fadeInScale 0.5s ease-out forwards;
+}
+
+/* Timeline Animations (for consistency with ClientHome.jsx) */
+@keyframes growLine {
+  0% {
+    width: 0;
+  }
+  100% {
+    width: 100%;
+  }
+}
+
+@keyframes bounceDot {
+  0%, 20%, 50%, 80%, 100% {
+    transform: translateY(0);
+  }
+  40% {
+    transform: translateY(-10px);
+  }
+  60% {
+    transform: translateY(-5px);
+  }
+}
+
+@keyframes glow {
+  0% {
+    box-shadow: 0 0 5px hsl(var(--primary) / 0.5);
+  }
+  50% {
+    box-shadow: 0 0 15px hsl(var(--primary) / 0.8);
+  }
+  100% {
+    box-shadow: 0 0 5px hsl(var(--primary) / 0.5);
+  }
+}
+
+.timeline-line {
+  animation: growLine 1s ease-out forwards;
+  animation-delay: 0.8s;
+}
+
+.timeline-dot {
+  animation: bounceDot 0.8s ease-out forwards, glow 2s infinite;
+}
+
+.timeline-dot:nth-child(1) {
+  animation-delay: 0.2s;
+}
+
+.timeline-dot:nth-child(3) {
+  animation-delay: 0.4s;
+}
+
+.timeline-dot:nth-child(5) {
+  animation-delay: 0.6s;
+}
+
+.step-item {
+  animation: fadeInScale 0.5s ease-out forwards;
+}
+
+.step-item:nth-child(1) {
+  animation-delay: 0.2s;
+}
+
+.step-item:nth-child(3) {
+  animation-delay: 0.4s;
+}
+
+.step-item:nth-child(5) {
+  animation-delay: 0.6s;
+}

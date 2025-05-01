@@ -1,50 +1,258 @@
+import { useState } from "react";
+import { Link, useLocation, useNavigate } from "react-router-dom";
+import { useAuth } from "../../context/AuthContext";
+import { Menu, X, User, LogOut, Bell } from "lucide-react";
 
+export default function Navbar() {
+  const { user, logout } = useAuth();
+  const location = useLocation();
+  const navigate = useNavigate();
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
-import { Link, useNavigate } from "react-router-dom"
-import { useAuth } from "../../context/AuthContext"
-
-function Navbar() {
-  const { user, logout } = useAuth()
-  const navigate = useNavigate()
+  // Mock unread notifications count
+  const unreadNotifications = 3;
 
   const handleLogout = () => {
-    logout()
-    navigate("/login")
-  }
+    logout();
+    navigate("/login");
+    setMobileMenuOpen(false);
+  };
+
+  const clientNavItems = [
+    { name: "Home", href: "/client/home" },
+    { name: "Find Lawyers", href: "/client/lawyer" },
+    { name: "My Cases", href: "/client/cases" },
+    { name: "Post a Case", href: "/client/cases/post" },
+    { name: "Appointments", href: "/client/appointments" },
+    { name: "Messages", href: "/client/messages" },
+  ];
+
+  const lawyerNavItems = [
+    { name: "Home", href: "/lawyer/home" },
+    { name: "Cases", href: "/lawyer/all-cases" },
+    { name: "Cases On Hand", href: "/lawyer/lawyerCase" },
+    { name: "My Bids", href: "/lawyer/bids" },
+    { name: "Appointments", href: "/lawyer/appointments" },
+    { name: "Messages", href: "/lawyer/messages" },
+  ];
+
+  const adminNavItems = [
+    { name: "Admin Panel", href: "/admin" },
+    { name: "Users", href: "/admin/users" },
+    { name: "Cases", href: "/admin/cases" },
+    { name: "Reports", href: "/admin/reports" },
+  ];
+
+  const navItems = user
+    ? user.role === "Client"
+      ? clientNavItems
+      : user.role === "Lawyer"
+      ? lawyerNavItems
+      : adminNavItems
+    : [];
+
+  const isActive = (href) => {
+    return location.pathname === href
+      ? "text-gray-800 font-semibold"
+      : "text-gray-800 hover:text-gray-600";
+  };
 
   return (
-    <nav className="bg-white shadow-md">
+    <nav className="bg-white">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex justify-between h-16">
+        <div className="flex justify-between h-20">
+          {/* Logo */}
           <div className="flex items-center">
-            <Link to="/" className="flex-shrink-0 flex items-center">
-              <img className="h-8 w-auto" src="/logo.png" alt="Logo" />
-              <span className="ml-2 text-xl font-bold text-navy">Legal Connect</span>
-            </Link>
+           
+              <img
+                src="/Logo.png"
+                alt="LegalConnect Ethiopia Logo"
+                className="pt-5 h-25 w-40"
+              />
+          
           </div>
-          <div className="flex items-center">
+
+          {/* Desktop Navigation */}
+          <div className="hidden md:flex items-center space-x-6">
+            {navItems.map((item) => (
+              <Link
+                key={item.name}
+                to={item.href}
+                className={`relative text-base font-medium ${isActive(
+                  item.href
+                )} flex items-center after:content-[''] after:absolute after:left-0 after:bottom-0 after:w-0 after:h-0.5 after:bg-gray-800 after:transition-all after:duration-300 hover:after:w-full`}
+              >
+                {item.name}
+              </Link>
+            ))}
+          </div>
+
+          {/* Right side */}
+          <div className="flex items-center space-x-4">
             {user ? (
               <>
-                <span className="text-navy mr-4">Welcome, {user.username}</span>
-                <button onClick={handleLogout} className="text-navy hover:text-gold transition-colors">
-                  Logout
+                {/* Welcome message */}
+                <span className="hidden md:block text-gray-800 text-base font-medium">
+                  Welcome, {user.username}
+                </span>
+                {/* Notifications Button */}
+                <Link
+                  to="/client/notification"
+                  className="relative text-gray-800 hover:text-gray-600 p-2 rounded-full hover:bg-gray-100 transition-all duration-300"
+                >
+                  <Bell className="h-6 w-6" />
+                  {unreadNotifications > 0 && (
+                    <span className="absolute top-0 right-0 inline-flex items-center justify-center h-5 w-5 rounded-full bg-red-500 text-xs font-medium text-white">
+                      {unreadNotifications}
+                    </span>
+                  )}
+                  <span className="sr-only">Notifications</span>
+                </Link>
+                {/* Profile Button */}
+                <Link
+                  to={
+                    user.role === "Lawyer"
+                      ? "/lawyer/profile"
+                      : user.role === "Client"
+                      ? "/client/clientprofile"
+                      : "/admin/profile"
+                  }
+                  className="text-gray-800 hover:text-gray-600 p-2 rounded-full hover:bg-gray-100 transition-all duration-300"
+                >
+                  <User className="h-6 w-6" />
+                  <span className="sr-only">Profile</span>
+                </Link>
+                {/* Logout Button */}
+                <button
+                  onClick={handleLogout}
+                  className="text-gray-800 hover:text-gray-600 p-2 rounded-full hover:bg-gray-100 transition-all duration-300"
+                >
+                  <LogOut className="h-6 w-6" />
+                  <span className="sr-only">Logout</span>
                 </button>
               </>
             ) : (
               <>
-                <Link to="/login" className="text-navy hover:text-gold transition-colors mr-4">
+                <Link
+                  to="/login"
+                  className="text-gray-800 hover:text-gray-600 text-base font-medium flex items-center"
+                >
+                  Login
+                  <svg
+                    className="ml-1 h-5 w-5"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                    xmlns="http://www.w3.org/2000/svg"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth="2"
+                      d="M11 16l-4-4m0 0l4-4m-4 4h14"
+                    />
+                  </svg>
+                </Link>
+
+              </>
+            )}
+
+            {/* Mobile menu button */}
+            <div className="flex md:hidden">
+              <button
+                onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+                className="inline-flex items-center justify-center p-2 rounded-md text-gray-800 hover:text-gray-600 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-500"
+              >
+                <span className="sr-only">Open main menu</span>
+                {mobileMenuOpen ? (
+                  <X className="block h-6 w-6" aria-hidden="true" />
+                ) : (
+                  <Menu className="block h-6 w-6" aria-hidden="true" />
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Mobile menu */}
+      {mobileMenuOpen && (
+        <div className="md:hidden">
+          <div className="px-2 pt-2 pb-3 space-y-1 sm:px-3">
+            {navItems.map((item) => (
+              <Link
+                key={item.name}
+                to={item.href}
+                className={`block px-3 py-2 rounded-md text-base font-medium ${isActive(
+                  item.href
+                )}`}
+                onClick={() => setMobileMenuOpen(false)}
+              >
+                {item.name}
+              </Link>
+            ))}
+            {user && (
+              <>
+                <div className="px-3 py-2 text-base font-medium text-gray-800">
+                  Welcome, {user.username}
+                </div>
+                <Link
+                  to={`/${user.role.toLowerCase()}/notifications`}
+                  className="block px-3 py-2 rounded-md text-base font-medium text-gray-800 hover:text-gray-600 flex items-center"
+                  onClick={() => setMobileMenuOpen(false)}
+                >
+                  <Bell className="h-5 w-5 mr-2" />
+                  Notifications
+                  {unreadNotifications > 0 && (
+                    <span className="ml-2 inline-flex items-center justify-center h-5 w-5 rounded-full bg-red-500 text-xs font-medium text-white">
+                      {unreadNotifications}
+                    </span>
+                  )}
+                </Link>
+                <Link
+                  to={
+                    user.role === "Lawyer"
+                      ? "/lawyer/profile"
+                      : user.role === "Client"
+                      ? "/client/clientprofile"
+                      : "/admin/profile"
+                  }
+                  className="block px-3 py-2 rounded-md text-base font-medium text-gray-800 hover:text-gray-600 flex items-center"
+                  onClick={() => setMobileMenuOpen(false)}
+                >
+                  <User className="h-5 w-5 mr-2" />
+                  Profile
+                </Link>
+                <button
+                  onClick={handleLogout}
+                  className="block w-full text-left px-3 py-2 rounded-md text-base font-medium text-gray-800 hover:text-gray-600 flex items-center"
+                >
+                  <LogOut className="h-5 w-5 mr-2" />
+                  Logout
+                </button>
+              </>
+            )}
+            {!user && (
+              <>
+                <Link
+                  to="/login"
+                  className="block px-3 py-2 rounded-md text-base font-medium text-gray-800 hover:text-gray-600"
+                  onClick={() => setMobileMenuOpen(false)}
+                >
                   Login
                 </Link>
-                <Link to="/register" className="text-navy hover:text-gold transition-colors">
-                  Register
+                <Link
+                  to="/register"
+                  className="block px-3 py-2 rounded-md text-base font-medium text-gray-800 hover:text-gray-600"
+                  onClick={() => setMobileMenuOpen(false)}
+                >
+                  Try for Free
                 </Link>
               </>
             )}
           </div>
         </div>
-      </div>
+      )}
     </nav>
-  )
+  );
 }
-
-export default Navbar
