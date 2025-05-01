@@ -10,7 +10,9 @@ import {
   CheckCircle,
   ChevronRight,
   ChevronDownCircle,
+  BarChart2,
 } from "lucide-react";
+import { jwtDecode } from "jwt-decode";
 
 export default function LawyerCase({ userName }) {
   const [cases, setCases] = useState([]);
@@ -18,84 +20,98 @@ export default function LawyerCase({ userName }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [selectedStatus, setSelectedStatus] = useState("all");
+  const [userId, setUserId] = useState(null);
 
+  // Decode token to get userId
   useEffect(() => {
+    const token = localStorage.getItem("token");
+    if (!token) {
+      setError("Authentication token not found. Please log in.");
+      setLoading(false);
+      window.location.href = "/login";
+      return;
+    }
+
+    try {
+      const decoded = jwtDecode(token);
+      if (!decoded.id) {
+        throw new Error("User ID not found in token.");
+      }
+      setUserId(decoded.id);
+      console.log("Decoded userId:", decoded.id);
+    } catch (err) {
+      console.error("Error decoding token:", err);
+      setError("Failed to authenticate. Please log in again.");
+      setLoading(false);
+      localStorage.removeItem("token");
+      window.location.href = "/login";
+    }
+  }, []);
+
+  // Fetch cases from backend
+  useEffect(() => {
+    if (!userId) return;
+
     const fetchCases = async () => {
       try {
         setLoading(true);
         setError(null);
 
         const token = localStorage.getItem("token");
-        if (!token) {
-          throw new Error("Authentication token not found. Please log in.");
-        }
+        const response = await fetch("http://localhost:5000/api/cases", {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
 
-        // Use valid ObjectIds (replace these with actual case IDs from your database)
-        const caseIds = [
-          "670e3f77d60e436b5c695771",
-          "670e3f77d60e436b5c695772",
-          "670e3f77d60e436b5c695773",
-        ];
-
-        const fetchedCases = [];
-        for (const caseId of caseIds) {
-          try {
-            const response = await fetch(
-              `http://localhost:5000/api/cases/${caseId}`,
-              {
-                headers: {
-                  Authorization: `Bearer ${token}`,
-                },
-              }
-            );
-
-            if (!response.ok) {
-              const errorData = await response.json();
-              if (response.status === 401 || response.status === 403) {
-                throw new Error("Session expired. Please log in again.");
-              }
-              if (response.status === 404) {
-                console.log(`Case ${caseId} not found, skipping...`);
-                continue; // Skip this case if not found
-              }
-              throw new Error(
-                errorData.message || "Failed to fetch case details."
-              );
-            }
-
-            const data = await response.json();
-            const caseData = data.case;
-
-            // Map backend case data to frontend format
-            const mappedCase = {
-              id: caseData._id,
-              caseId: caseData._id,
-              caseTitle: caseData.description || "Untitled Case",
-              clientName: caseData.client?.username || "Unknown Client",
-              amount: caseData.winning_bid?.amount || 0,
-              submittedDate: caseData.createdAt,
-              expiryDate: caseData.deadline,
-              status: mapStatus(caseData.status), // Map backend status to frontend status
-              notes:
-                caseData.notes && caseData.notes.length > 0
-                  ? caseData.notes[0].content
-                  : "No notes available.",
-              category: caseData.category || "Other",
-            };
-
-            fetchedCases.push(mappedCase);
-          } catch (err) {
-            console.error(`Error fetching case ${caseId}:`, err.message);
-            // Continue fetching other cases even if one fails
+        if (!response.ok) {
+          const errorData = await response.json();
+          if (response.status === 401 || response.status === 403) {
+            throw new Error("Session expired. Please log in again.");
           }
+          throw new Error(errorData.message || "Failed to fetch cases.");
         }
 
-        if (fetchedCases.length === 0) {
-          throw new Error("No cases found or accessible.");
+        const data = await response.json();
+        console.log("API response:", data);
+
+        // Validate cases data
+        if (!Array.isArray(data.cases)) {
+          throw new Error("Invalid response: cases is not an array.");
         }
 
-        setCases(fetchedCases);
-        setFilteredCase(fetchedCases);
+        // Filter cases where assigned_lawyer._id matches the lawyer's ID
+        const assignedCases = data.cases.filter(
+          (caseItem) => caseItem.assigned_lawyer?._id === userId
+        );
+
+        if (assignedCases.length === 0) {
+          console.log("No assigned cases found for this lawyer.");
+        }
+
+        // Map backend case data to frontend format
+        const mappedCases = assignedCases.map((caseItem) => {
+          console.log("Mapping case:", caseItem);
+          return {
+            id: caseItem._id || "unknown-id",
+            caseId: caseItem._id || "N/A",
+            caseTitle: caseItem.description || "Untitled Case",
+            clientName: caseItem.client?.username || "Unknown Client",
+            amount: caseItem.winning_bid?.amount || 0,
+            submittedDate: caseItem.createdAt || new Date().toISOString(),
+            expiryDate: caseItem.deadline || new Date().toISOString(),
+            status: mapStatus(caseItem.status || "posted"),
+            notes:
+              caseItem.notes && caseItem.notes.length > 0
+                ? caseItem.notes[0].content
+                : "No notes available.",
+            category: caseItem.category || "Other",
+          };
+        });
+
+        console.log("Mapped cases:", mappedCases);
+        setCases(mappedCases);
+        setFilteredCase(mappedCases);
       } catch (err) {
         console.error("Error fetching cases:", err);
         setError(err.message);
@@ -109,7 +125,7 @@ export default function LawyerCase({ userName }) {
     };
 
     fetchCases();
-  }, []);
+  }, [userId]);
 
   // Helper function to map backend status to frontend status
   const mapStatus = (backendStatus) => {
@@ -139,6 +155,9 @@ export default function LawyerCase({ userName }) {
 
   const formatDate = (dateString) => {
     const date = new Date(dateString);
+    if (isNaN(date.getTime())) {
+      return "Invalid Date";
+    }
     return new Intl.DateTimeFormat("en-US", {
       month: "short",
       day: "numeric",
@@ -147,6 +166,9 @@ export default function LawyerCase({ userName }) {
   };
 
   const formatCurrency = (amount) => {
+    if (typeof amount !== "number") {
+      return "N/A";
+    }
     return new Intl.NumberFormat("en-US", {
       style: "currency",
       currency: "ETB",
@@ -235,61 +257,74 @@ export default function LawyerCase({ userName }) {
             <ul className="divide-y divide-gray-200">
               {filteredCase.map((caseItem) => (
                 <li key={caseItem.id} className="hover:bg-gray-50">
-                  <Link to={`/lawyer/cases/${caseItem.id}`} className="block">
-                    <div className="px-6 py-5">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center">
-                          <div className="flex-shrink-0">
-                            <div className="h-12 w-12 rounded-full bg-blue-100 flex items-center justify-center">
-                              <Briefcase className="h-6 w-6 text-blue-500" />
-                            </div>
-                          </div>
-                          <div className="ml-4">
-                            <div className="flex items-center">
-                              {getStatusIcon(caseItem.status)}
-                              <span
-                                className={`ml-2 px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(
-                                  caseItem.status
-                                )}`}
-                              >
-                                {caseItem.status.charAt(0).toUpperCase() +
-                                  caseItem.status.slice(1)}
-                              </span>
-                            </div>
-                            <div className="mt-1 text-sm text-gray-500">
-                              <span className="flex items-center">
-                                <FileText className="mr-1 h-4 w-4 text-gray-400" />
-                                Client: {caseItem.clientName}
-                              </span>
-                            </div>
-                            <div className="mt-1 flex items-center text-sm text-gray-500">
-                              <DollarSign className="mr-1 h-4 w-4 text-gray-400" />
-                              Bid Amount: {formatCurrency(caseItem.amount)}
-                            </div>
+                  <div className="px-6 py-5">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center">
+                        <div className="flex-shrink-0">
+                          <div className="h-12 w-12 rounded-full bg-purple-100 flex items-center justify-center">
+                            <Briefcase className="h-6 w-6 text-primary" />
                           </div>
                         </div>
-                        <div className="flex flex-col items-end">
-                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 mb-2">
-                            {caseItem.category}
-                          </span>
-                          <div className="flex items-center text-sm text-gray-500">
-                            <Clock className="mr-1 h-4 w-4 text-gray-400" />
-                            Started Date: {formatDate(caseItem.submittedDate)}
+                        <div className="ml-4">
+                          <div className="flex items-center">
+                            {getStatusIcon(caseItem.status)}
+                            <span
+                              className={`ml-2 px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(
+                                caseItem.status
+                              )}`}
+                            >
+                              {caseItem.status.charAt(0).toUpperCase() +
+                                caseItem.status.slice(1)}
+                            </span>
                           </div>
-                          <div className="flex items-center text-sm text-gray-500 mt-1">
-                            <Calendar className="mr-1 h-4 w-4 text-gray-400" />
-                            Expected to End: {formatDate(caseItem.expiryDate)}
+                          <div className="mt-1 text-sm text-gray-500">
+                            <span className="flex items-center">
+                              <FileText className="mr-1 h-4 w-4 text-gray-400" />
+                              Client: {caseItem.clientName}
+                            </span>
                           </div>
-                          <ChevronRight className="h-5 w-5 text-gray-400 mt-2" />
+                          <div className="mt-1 flex items-center text-sm text-gray-500">
+                            <DollarSign className="mr-1 h-4 w-4 text-gray-400" />
+                            Bid Amount: {formatCurrency(caseItem.amount)}
+                          </div>
                         </div>
                       </div>
-                      <div className="mt-2 ml-16">
-                        <p className="text-sm text-gray-600 line-clamp-2">
-                          {caseItem.notes}
-                        </p>
+                      <div className="flex flex-col items-end">
+                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 mb-2">
+                          {caseItem.category}
+                        </span>
+                        <div className="flex items-center text-sm text-gray-500">
+                          <Clock className="mr-1 h-4 w-4 text-gray-400" />
+                          Started Date: {formatDate(caseItem.submittedDate)}
+                        </div>
+                        <div className="flex items-center text-sm text-gray-500 mt-1">
+                          <Calendar className="mr-1 h-4 w-4 text-gray-400" />
+                          Expected to End: {formatDate(caseItem.expiryDate)}
+                        </div>
+                        <div className="flex space-x-2 mt-2">
+                          <Link
+                            to={`/lawyer/cases/${caseItem.id}`}
+                            className="flex items-center text-sm text-primary hover:underline"
+                          >
+                            <ChevronRight className="h-5 w-5 text-gray-400 mr-1" />
+                            Details
+                          </Link>
+                          <Link
+                            to={`/lawyer/cases/${caseItem.id}/analytics`}
+                            className="flex items-center text-sm text-primary hover:underline"
+                          >
+                            <BarChart2 className="h-5 w-5 text-gray-400 mr-1" />
+                            Analytics
+                          </Link>
+                        </div>
                       </div>
                     </div>
-                  </Link>
+                    <div className="mt-2 ml-16">
+                      <p className="text-sm text-gray-600 line-clamp-2">
+                        {caseItem.notes}
+                      </p>
+                    </div>
+                  </div>
                 </li>
               ))}
             </ul>

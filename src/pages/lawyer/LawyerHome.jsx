@@ -27,126 +27,136 @@ export default function LawyerHome({ userName }) {
   const [upcomingAppointments, setUpcomingAppointments] = useState([]);
   const [legalUpdates, setLegalUpdates] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
   useEffect(() => {
-    // In a real application, you would fetch this data from your API
-    // For demo purposes, we'll use mock data
-    setTimeout(() => {
-      setStats({
-        activeCases: 5,
-        upcomingAppointments: 3,
-        unreadMessages: 7,
-        pendingBids: 2,
-        totalEarnings: 45000,
-        clientsHelped: 24,
-      });
+    const fetchData = async () => {
+      try {
+        setLoading(true);
+        setError(null);
 
-      const mockAvailableCases = [
-        {
-          id: 201,
-          title: "Business Registration and Licensing Assistance",
-          client: "Addis Trading PLC",
-          status: "open",
-          lastUpdated: "2025-03-16",
-          category: "Business Law",
-          description:
-            "Need assistance with registering a new import/export business in Addis Ababa and obtaining necessary licenses.",
-        },
-        {
-          id: 202,
-          title: "Employment Contract Review",
-          client: "Ethiopian Tech Startup",
-          status: "open",
-          lastUpdated: "2025-03-15",
-          category: "Labor Law",
-          description:
-            "Need a lawyer to review employment contracts for our growing tech company to ensure compliance with Ethiopian labor laws.",
-        },
-        {
-          id: 203,
-          title: "Property Dispute Resolution",
-          client: "Bekele Family",
-          status: "open",
-          lastUpdated: "2025-03-14",
-          category: "Property Law",
-          description:
-            "Family dispute over inherited property in Bahir Dar. Need legal representation to resolve ownership claims.",
-        },
-        {
-          id: 204,
-          title: "Trademark Registration",
-          client: "Habesha Designs",
-          status: "open",
-          lastUpdated: "2025-03-13",
-          category: "Intellectual Property",
-          description:
-            "Local clothing brand seeking trademark registration and protection for their unique Ethiopian-inspired designs.",
-        },
-      ];
+        // Fetch available cases
+        const token = localStorage.getItem("token");
+        if (!token) {
+          throw new Error("Authentication token not found. Please log in.");
+        }
 
-      const mockAppointments = [
-        {
-          id: 1,
-          client: "Abebe Bekele",
-          date: "2025-03-20T10:00:00",
-          status: "confirmed",
-        },
-        {
-          id: 2,
-          client: "Tigist Mengistu",
-          date: "2025-03-22T14:30:00",
-          status: "confirmed",
-        },
-        {
-          id: 3,
-          client: "Dawit Haile",
-          date: "2025-03-25T11:00:00",
-          status: "pending",
-        },
-      ];
+        const casesResponse = await fetch("http://localhost:5000/api/cases", {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
 
-      const mockLegalUpdates = [
-        {
-          id: 1,
-          title: "New Business Registration Regulations in Ethiopia",
-          excerpt:
-            "Recent changes to business registration procedures and requirements that all lawyers should be aware of.",
-          author: "Ethiopian Legal Review",
-          date: "2025-03-15",
-          category: "Business Law",
-          imageUrl: "/placeholder.svg?height=200&width=300",
-          readTime: "8 min read",
-        },
-        {
-          id: 2,
-          title: "Updates to Ethiopian Labor Law: What Lawyers Need to Know",
-          excerpt:
-            "Recent amendments to labor regulations affecting employment contracts, working hours, and employee benefits.",
-          author: "Ethiopian Bar Association",
-          date: "2025-03-10",
-          category: "Labor Law",
-          imageUrl: "/placeholder.svg?height=200&width=300",
-          readTime: "10 min read",
-        },
-        {
-          id: 3,
-          title:
-            "Ethiopian Intellectual Property Office: New Filing Procedures",
-          excerpt:
-            "Changes to trademark and patent filing procedures that will affect how IP lawyers submit applications.",
-          author: "IP Law Journal",
-          date: "2025-03-05",
-          category: "Intellectual Property",
-          imageUrl: "/placeholder.svg?height=200&width=300",
-          readTime: "6 min read",
-        },
-      ];
+        if (!casesResponse.ok) {
+          const errorData = await casesResponse.json();
+          if (casesResponse.status === 401 || casesResponse.status === 403) {
+            throw new Error("Session expired. Please log in again.");
+          }
+          throw new Error(errorData.message || "Failed to fetch cases.");
+        }
 
-      setAvailableCases(mockAvailableCases);
-      setUpcomingAppointments(mockAppointments);
-      setLegalUpdates(mockLegalUpdates);
-      setLoading(false);
-    }, 1000);
+        const casesData = await casesResponse.json();
+        console.log("Fetched cases:", casesData.cases);
+
+        // Filter for posted cases and map to the required format
+        const mappedCases = casesData.cases
+          .filter((caseItem) => caseItem.status?.toLowerCase() === "posted")
+          .map((caseItem) => ({
+            id: caseItem._id || "unknown-id",
+            title: caseItem.description || "Untitled Case",
+            client: caseItem.client?.username || "Unknown Client",
+            status: caseItem.status || "posted",
+            lastUpdated: caseItem.createdAt || new Date().toISOString(),
+            category: caseItem.category || "Other",
+            description: caseItem.description || "No description available.",
+          }))
+          .sort((a, b) => new Date(b.lastUpdated) - new Date(a.lastUpdated)); // Sort by lastUpdated (newest first)
+
+        setAvailableCases(mappedCases);
+
+        // Mock data for other sections (unchanged)
+        setStats({
+          activeCases: 5,
+          upcomingAppointments: 3,
+          unreadMessages: 7,
+          pendingBids: 2,
+          totalEarnings: 45000,
+          clientsHelped: 24,
+        });
+
+        const mockAppointments = [
+          {
+            id: 1,
+            client: "Abebe Bekele",
+            date: "2025-03-20T10:00:00",
+            status: "confirmed",
+          },
+          {
+            id: 2,
+            client: "Tigist Mengistu",
+            date: "2025-03-22T14:30:00",
+            status: "confirmed",
+          },
+          {
+            id: 3,
+            client: "Dawit Haile",
+            date: "2025-03-25T11:00:00",
+            status: "pending",
+          },
+        ];
+
+        const mockLegalUpdates = [
+          {
+            id: 1,
+            title: "New Business Registration Regulations in Ethiopia",
+            excerpt:
+              "Recent changes to business registration procedures and requirements that all lawyers should be aware of.",
+            author: "Ethiopian Legal Review",
+            date: "2025-03-15",
+            category: "Business Law",
+            imageUrl: "/placeholder.svg?height=200&width=300",
+            readTime: "8 min read",
+          },
+          {
+            id: 2,
+            title: "Updates to Ethiopian Labor Law: What Lawyers Need to Know",
+            excerpt:
+              "Recent amendments to labor regulations affecting employment contracts, working hours, and employee benefits.",
+            author: "Ethiopian Bar Association",
+            date: "2025-03-10",
+            category: "Labor Law",
+            imageUrl: "/placeholder.svg?height=200&width=300",
+            readTime: "10 min read",
+          },
+          {
+            id: 3,
+            title:
+              "Ethiopian Intellectual Property Office: New Filing Procedures",
+            excerpt:
+              "Changes to trademark and patent filing procedures that will affect how IP lawyers submit applications.",
+            author: "IP Law Journal",
+            date: "2025-03-05",
+            category: "Intellectual Property",
+            imageUrl: "/placeholder.svg?height=200&width=300",
+            readTime: "6 min read",
+          },
+        ];
+
+        setUpcomingAppointments(mockAppointments);
+        setLegalUpdates(mockLegalUpdates);
+      } catch (err) {
+        console.error("Error fetching data:", err);
+        setError(err.message);
+        if (err.message.includes("log in")) {
+          localStorage.removeItem("token");
+          window.location.href = "/login";
+        }
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchData();
   }, []);
 
   const formatDate = (dateString) => {
@@ -174,6 +184,21 @@ export default function LawyerHome({ userName }) {
     return (
       <div className="flex items-center justify-center h-64">
         <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary"></div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="text-red-600 text-center mt-4">
+        {error}
+        {error.includes("token") && (
+          <p className="mt-2">
+            <Link to="/login" className="text-blue-500 hover:underline">
+              Click here to log in
+            </Link>
+          </p>
+        )}
       </div>
     );
   }
@@ -280,43 +305,40 @@ export default function LawyerHome({ userName }) {
                 </Link>
               </div>
 
-              <div className="divide-y divide-gray-200">
-                {availableCases.map((caseItem) => (
-                  <div key={caseItem.id} className="p-6 hover:bg-gray-50">
-                    <div className="flex flex-col md:flex-row md:items-start md:justify-between">
-                      <div className="flex-1">
-                        <div className="flex items-start">
-                          <span className="ml-2 px-2 py-1 text-xs font-medium rounded-full bg-blue-100 text-blue-800">
-                            {caseItem.category}
-                          </span>
+              {availableCases.length > 0 ? (
+                <div className="divide-y divide-gray-200">
+                  {availableCases.map((caseItem) => (
+                    <div key={caseItem.id} className="p-6 hover:bg-gray-50">
+                      <div className="flex flex-col md:flex-row md:items-start md:justify-between">
+                        <div className="flex-1">
+                          <div className="flex items-start">
+                            <span className="ml-2 px-2 py-1 text-xs font-medium rounded-full bg-blue-100 text-blue-800">
+                              {caseItem.category}
+                            </span>
+                          </div>
+
+                          <div className="mt-1 flex items-center text-sm text-gray-500">
+                            <Users className="flex-shrink-0 mr-1.5 h-4 w-4 text-gray-400" />
+                            Client: {caseItem.client}
+                          </div>
+
+                          <p className="mt-2 text-sm text-gray-600 line-clamp-2">
+                            {caseItem.description}
+                          </p>
+
+                          <div className="mt-2 text-xs text-gray-500">
+                            Posted: {formatSimpleDate(caseItem.lastUpdated)}
+                          </div>
                         </div>
-
-                        <div className="mt-1 flex items-center text-sm text-gray-500">
-                          <Users className="flex-shrink-0 mr-1.5 h-4 w-4 text-gray-400" />
-                          Client: {caseItem.client}
-                        </div>
-
-                        <p className="mt-2 text-sm text-gray-600 line-clamp-2">
-                          {caseItem.description}
-                        </p>
-
-                        <div className="mt-2 text-xs text-gray-500">
-                          Posted: {formatSimpleDate(caseItem.lastUpdated)}
-                        </div>
-                      </div>
-
-                      <div className="mt-4 md:mt-0 md:ml-6">
-                        <Link
-                          to={`/lawyer/cases/available/${caseItem.id}`}
-                          className="inline-flex items-center px-4 py-2 border border-transparent rounded-lg text-sm font-medium text-primary-foreground bg-primary hover:bg-primary/90"
-                        >
-                          View Details
-                        </Link>
                       </div>
                     </div>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="p-6 text-center text-gray-500">
+                  <p>No available cases at the moment.</p>
+                </div>
+              )}
             </div>
           </div>
 

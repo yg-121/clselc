@@ -123,7 +123,7 @@ export default function AppointmentsPage({ userRole }) {
         }
 
         // Fetch cases
-        const casesResponse = await fetch("http://localhost:5000/api/users", {
+        const casesResponse = await fetch("http://localhost:5000/api/cases", {
           headers: {
             Authorization: `Bearer ${token}`,
           },

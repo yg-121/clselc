@@ -128,7 +128,7 @@ export default function LawyerAllCases() {
                 >
                   <div className="flex flex-col items-center">
                     <div className="rounded-full bg-purple-100 p-3 mb-4">
-                      <FileText className="h-6 w-6 text-purple-600" />
+                      <FileText className="h-6 w-6 text-primary" />
                     </div>
                     <p className="text-sm text-gray-500 mb-2">
                       {caseItem.category || "N/A"}
@@ -155,7 +155,7 @@ export default function LawyerAllCases() {
                     {caseItem._id ? (
                       <Link
                         to={`/lawyer/all-cases/${caseItem._id}`} // Updated to match the route in App.jsx
-                        className="inline-flex items-center px-4 py-2 border border-transparent rounded-lg text-sm font-medium text-white bg-blue-500 hover:bg-blue-600 transition-all duration-300"
+                        className="inline-flex items-center px-4 py-2 border border-transparent rounded-lg text-sm font-medium text-primary-foreground bg-primary hover:bg-primary/90"
                       >
                         View Details
                       </Link>
