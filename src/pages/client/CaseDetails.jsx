@@ -14,6 +14,7 @@ import {
   Trash2,
 } from "lucide-react";
 import CaseDocument from "./CaseDocument";
+import AppointmentsPage from "../common/Appointments";
 
 // Helper function to map status to color
 const getStatusColor = (status) => {
@@ -79,7 +80,6 @@ export default function CaseDetails() {
         throw new Error("Authentication token not found. Please log in.");
       }
 
-      // Fetch case details
       console.log("Fetching case details for caseId:", id);
       const caseRes = await fetch(`http://localhost:5000/api/cases/${id}`, {
         headers: {
@@ -100,7 +100,6 @@ export default function CaseDetails() {
         deadline: caseData.case.deadline.split("T")[0],
       });
 
-      // Fetch bids for the case
       const bidsRes = await fetch(`http://localhost:5000/api/bids/case/${id}`, {
         headers: {
           Authorization: `Bearer ${token}`,
@@ -156,7 +155,6 @@ export default function CaseDetails() {
       const data = await res.json();
       setAcceptSuccess(data.message);
 
-      // Refresh case and bids data
       await fetchCaseDetails();
     } catch (err) {
       console.error("Error accepting bid:", err);
@@ -196,7 +194,6 @@ export default function CaseDetails() {
       const data = await res.json();
       setUpdateSuccess(data.message);
 
-      // Refresh case data
       await fetchCaseDetails();
       setTimeout(() => {
         setIsEditingCase(false);
@@ -236,7 +233,6 @@ export default function CaseDetails() {
       const data = await res.json();
       setCloseSuccess(data.message);
 
-      // Refresh case data
       await fetchCaseDetails();
     } catch (err) {
       console.error("Error closing case:", err);
@@ -314,10 +310,8 @@ export default function CaseDetails() {
       const data = await res.json();
       setAddNoteSuccess(data.message);
 
-      // Refresh case data
       await fetchCaseDetails();
 
-      // Reset form and close modal after success
       setTimeout(() => {
         setIsAddNoteModalOpen(false);
         setNoteForm({ content: "", visibility: "Both" });
@@ -405,12 +399,14 @@ export default function CaseDetails() {
             </h2>
           </div>
           <div className="self-end flex flex-col space-y-4">
-            <button
-              onClick={() => setIsEditingCase(true)}
-              className="inline-flex items-center px-3 py-1 bg-gradient-to-r from-gray-700 to-gray-800 text-white rounded-lg shadow-md hover:from-gray-800 hover:to-gray-900 hover:scale-105 transition-all duration-300"
-            >
-              <Edit className="h-4 w-4 mr-2" /> Update Case
-            </button>
+            {caseItem.status !== "Assigned" && caseItem.status !== "Closed" && (
+              <button
+                onClick={() => setIsEditingCase(true)}
+                className="inline-flex items-center px-3 py-1 bg-gradient-to-r from-gray-700 to-gray-800 text-white rounded-lg shadow-md hover:from-gray-800 hover:to-gray-900 hover:scale-105 transition-all duration-300"
+              >
+                <Edit className="h-4 w-4 mr-2" /> Update Case
+              </button>
+            )}
             {caseItem.status === "Assigned" && (
               <button
                 onClick={() => setIsCloseModalOpen(true)}
@@ -1045,6 +1041,11 @@ export default function CaseDetails() {
           </div>
         </div>
       </div>
+
+      {/* Appointments Section */}
+      {caseItem.status === "Assigned" && (
+        <AppointmentsPage caseItem={caseItem} fetchCaseDetails={fetchCaseDetails} />
+      )}
 
       {/* Back Button */}
       <div className="mt-6">

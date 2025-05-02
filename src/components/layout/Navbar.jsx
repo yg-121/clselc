@@ -23,7 +23,7 @@ export default function Navbar() {
     { name: "Find Lawyers", href: "/client/lawyer" },
     { name: "My Cases", href: "/client/cases" },
     { name: "Post a Case", href: "/client/cases/post" },
-    { name: "Appointments", href: "/client/appointments" },
+    // { name: "Appointments", href: "/client/appointments" },
     { name: "Messages", href: "/client/messages" },
   ];
 
@@ -32,7 +32,7 @@ export default function Navbar() {
     { name: "Cases", href: "/lawyer/all-cases" },
     { name: "Cases On Hand", href: "/lawyer/lawyerCase" },
     { name: "My Bids", href: "/lawyer/bids" },
-    { name: "Appointments", href: "/lawyer/appointments" },
+    // { name: "Appointments", href: "/lawyer/appointments" },
     { name: "Messages", href: "/lawyer/messages" },
   ];
 
