@@ -63,13 +63,11 @@ export default function Navbar() {
         <div className="flex justify-between h-20">
           {/* Logo */}
           <div className="flex items-center">
-           
-              <img
-                src="/Logo.png"
-                alt="LegalConnect Ethiopia Logo"
-                className="pt-5 h-25 w-40"
-              />
-          
+            <img
+              src="/Logo.png"
+              alt="LegalConnect Ethiopia Logo"
+              className="pt-5 h-25 w-40"
+            />
           </div>
 
           {/* Desktop Navigation */}
@@ -112,7 +110,7 @@ export default function Navbar() {
                 <Link
                   to={
                     user.role === "Lawyer"
-                      ? "/lawyer/profile"
+                      ? `/lawyer/profile/${user._id}`
                       : user.role === "Client"
                       ? "/client/clientprofile"
                       : "/admin/profile"
@@ -153,7 +151,6 @@ export default function Navbar() {
                     />
                   </svg>
                 </Link>
-
               </>
             )}
 

@@ -1,7 +1,20 @@
 import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
-import { Calendar, Filter, Plus } from "lucide-react";
+import { Calendar, Filter, Plus, X } from "lucide-react";
 import { jwtDecode } from "jwt-decode";
+
+const getStatusColor = (status) => {
+  switch (status.toLowerCase()) {
+    case "posted":
+      return "bg-gradient-to-r from-amber-500 to-amber-600";
+    case "assigned":
+      return "bg-gradient-to-r from-teal-500 to-teal-600";
+    case "closed":
+      return "bg-gradient-to-r from-green-500 to-green-600";
+    default:
+      return "bg-gradient-to-r from-gray-400 to-gray-500";
+  }
+};
 
 export default function AppointmentsPage({
   userRole,
@@ -15,8 +28,6 @@ export default function AppointmentsPage({
   const [userId, setUserId] = useState(null);
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({
-    lawyer: "",
-    client: "",
     case: "",
     date: "",
     type: "Meeting",
@@ -25,6 +36,8 @@ export default function AppointmentsPage({
   const [formError, setFormError] = useState(null);
   const [formSuccess, setFormSuccess] = useState(null);
   const [formLoading, setFormLoading] = useState(false);
+  const [cancelLoading, setCancelLoading] = useState(false);
+  const [cancelError, setCancelError] = useState(null);
 
   // Decode token to get userId
   useEffect(() => {
@@ -50,6 +63,60 @@ export default function AppointmentsPage({
       window.location.href = "/login";
     }
   }, []);
+
+  // Fetch case details from API
+  useEffect(() => {
+    const fetchCaseDetailsFromApi = async () => {
+      if (!caseItem || !caseItem._id) {
+        setError("Case ID is missing or invalid.");
+        setLoading(false);
+        return;
+      }
+
+      try {
+        setLoading(true);
+        setError(null);
+
+        const token = localStorage.getItem("token");
+        const response = await fetch(
+          `http://localhost:5000/api/cases/${caseItem._id}`,
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          }
+        );
+
+        if (!response.ok) {
+          const errorData = await response.json();
+          if (response.status === 401 || response.status === 403) {
+            throw new Error("Session expired. Please log in again.");
+          }
+          throw new Error(errorData.message || "Failed to fetch case details.");
+        }
+
+        const data = await response.json();
+        console.log("Fetched case details:", data); // Debug log
+        setForm((prevForm) => ({
+          ...prevForm,
+          lawyer: data.case.assigned_lawyer?._id || "",
+          client: data.case.client?._id || "",
+          case: data.case._id || "",
+        }));
+      } catch (err) {
+        console.error("Error fetching case details:", err);
+        setError(err.message);
+        if (err.message.includes("log in")) {
+          localStorage.removeItem("token");
+          window.location.href = "/login";
+        }
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchCaseDetailsFromApi();
+  }, [caseItem]);
 
   // Fetch appointments
   useEffect(() => {
@@ -92,19 +159,6 @@ export default function AppointmentsPage({
     fetchAppointments();
   }, [userId]);
 
-  // Pre-fill form with caseItem data
-  useEffect(() => {
-    if (caseItem) {
-      console.log("Pre-filling form with caseItem:", caseItem); // Debug log
-      setForm((prevForm) => ({
-        ...prevForm,
-        lawyer: caseItem.assigned_lawyer?._id || "",
-        client: caseItem.client?._id || "",
-        case: caseItem._id || "",
-      }));
-    }
-  }, [caseItem]);
-
   // Handle form submission to create appointment
   const handleCreateAppointment = async (e) => {
     e.preventDefault();
@@ -121,39 +175,18 @@ export default function AppointmentsPage({
       // Validate date
       const date = new Date(form.date);
       if (isNaN(date) || date < new Date()) {
-        throw new Error("Please select a future date.");
-      }
-
-      // Validate caseItem data
-      if (!caseItem || !caseItem._id) {
-        throw new Error("Case data is missing or invalid.");
+        throw new Error("Please select a future date for the appointment.");
       }
 
       // Build the payload for the POST /appointments endpoint
       const payload = {
+        client: caseItem.client._id,
+        lawyer: caseItem.assigned_lawyer._id,
         date: date.toISOString().split("T")[0],
         type: form.type || "Meeting",
         description: form.description || undefined,
-        case: caseItem._id || undefined,
+        case: form.case || undefined,
       };
-
-      console.log("caseItem.assigned_lawyer:", caseItem.assigned_lawyer); // Debug log
-      console.log("caseItem.client:", caseItem.client); // Debug log
-      if (userRole === "Client") {
-        if (!caseItem.assigned_lawyer || !caseItem.assigned_lawyer._id) {
-          throw new Error(
-            "No lawyer assigned to this case or lawyer ID is missing."
-          );
-        }
-        payload.lawyer = caseItem.assigned_lawyer._id;
-      } else {
-        if (!caseItem.client || !caseItem.client._id) {
-          throw new Error(
-            "No client assigned to this case or client ID is missing."
-          );
-        }
-        payload.client = caseItem.client._id;
-      }
 
       console.log("Payload being sent:", payload); // Debug log
       const response = await fetch("http://localhost:5000/api/appointments", {
@@ -185,9 +218,9 @@ export default function AppointmentsPage({
       setTimeout(() => {
         setShowForm(false);
         setForm({
-          lawyer: caseItem.assigned_lawyer?._id || "",
-          client: caseItem.client?._id || "",
-          case: caseItem._id || "",
+          lawyer: form.lawyer,
+          client: form.client,
+          case: form.case,
           date: "",
           type: "Meeting",
           description: "",
@@ -208,6 +241,54 @@ export default function AppointmentsPage({
     }
   };
 
+  // Handle appointment cancellation
+  const handleCancelAppointment = async (id) => {
+    try {
+      setCancelLoading(true);
+      setCancelError(null);
+
+      const token = localStorage.getItem("token");
+      if (!token) {
+        throw new Error("Authentication token not found. Please log in.");
+      }
+
+      const response = await fetch(
+        `http://localhost:5000/api/appointments/${id}/cancel`,
+        {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        if (response.status === 404) {
+          throw new Error(errorData.message || "Appointment not found");
+        }
+        throw new Error(errorData.message || "Failed to cancel appointment");
+      }
+
+      const data = await response.json();
+      setAppointments((prevAppointments) =>
+        prevAppointments.map((appt) =>
+          appt._id === id ? data.appointment : appt
+        )
+      );
+    } catch (err) {
+      console.error("Error cancelling appointment:", err);
+      setCancelError(err.message);
+      if (err.message.includes("log in")) {
+        localStorage.removeItem("token");
+        window.location.href = "/login";
+      }
+    } finally {
+      setCancelLoading(false);
+    }
+  };
+
   // Filter appointments
   const filteredAppointments = appointments.filter((appointment) => {
     const now = new Date();
@@ -219,6 +300,9 @@ export default function AppointmentsPage({
       ? isUpcoming
       : !isUpcoming;
   });
+
+  // Determine if the "Book Appointment" button should be disabled
+  const isBookingDisabled = userRole === "Client" ? !form.lawyer : !form.client;
 
   if (loading) {
     return (
@@ -244,13 +328,11 @@ export default function AppointmentsPage({
   }
 
   return (
-    <div className="font-inter bg-background text-foreground">
+    <div className="bg-white border border-gray-300 rounded-lg shadow-md p-6 mb-6 hover:shadow-lg hover:scale-101 transition-all duration-300">
       {/* Header */}
-      <div className="bg-gradient-to-r from-primary to-primary/80 text-primary-foreground py-12">
+      <div className=" flex justify-between">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <h1 className="text-3xl font-bold">
-            Appointments for Case: {caseItem.category}
-          </h1>
+          <h1 className="text-3xl font-bold">Appointments</h1>
         </div>
       </div>
 
@@ -276,7 +358,19 @@ export default function AppointmentsPage({
             </div>
             <button
               onClick={() => setShowForm(!showForm)}
-              className="inline-flex items-center px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-all duration-300"
+              disabled={isBookingDisabled}
+              className={`inline-flex items-center px-4 py-2 rounded-lg transition-all duration-300 ${
+                isBookingDisabled
+                  ? "bg-gray-400 text-gray-200 cursor-not-allowed"
+                  : "bg-primary text-primary-foreground hover:bg-primary/90"
+              }`}
+              title={
+                isBookingDisabled
+                  ? userRole === "Client"
+                    ? "No lawyer assigned to this case."
+                    : "No client assigned to this case."
+                  : ""
+              }
             >
               <Plus className="h-5 w-5 mr-2" />
               {showForm ? "Hide Form" : "Book Appointment"}
@@ -287,23 +381,23 @@ export default function AppointmentsPage({
         {/* Appointments List */}
         {filteredAppointments.length > 0 ? (
           <div className="bg-card text-card-foreground rounded-lg shadow-md p-6 mb-6">
+            {console.log(filteredAppointments)}
             <div className="space-y-4">
               {filteredAppointments.map((appointment) => (
                 <div
                   key={appointment._id}
-                  className="flex items-center p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-all duration-300"
+                  className="flex items-center p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-all duration-300 relative"
                 >
                   <Calendar className="h-6 w-6 text-gray-500 mr-4" />
+                  <span
+                    className={`px-2 py-1.5 text-sm text-white rounded-full ${getStatusColor(
+                      appointment.status
+                    )}`}
+                    style={{ position: "absolute", top: "4px", right: "8px" }}
+                  >
+                    {appointment.status}
+                  </span>
                   <div className="flex-1">
-                    <h3 className="text-sm font-medium text-foreground">
-                      {userRole === "Client"
-                        ? `Meeting with ${
-                            appointment.lawyerName || "Unknown Lawyer"
-                          }`
-                        : `Meeting with ${
-                            appointment.clientName || "Unknown Client"
-                          }`}
-                    </h3>
                     <p className="text-sm text-gray-600">
                       {new Date(appointment.date).toLocaleString("en-US", {
                         dateStyle: "medium",
@@ -313,31 +407,44 @@ export default function AppointmentsPage({
                     <p className="text-sm text-gray-600">
                       Type: {appointment.type || "Meeting"}
                     </p>
-                    {appointment.case && (
-                      <p className="text-sm text-gray-600">
-                        Case: {appointment.caseDescription || appointment.case}
-                      </p>
-                    )}
                     {appointment.description && (
                       <p className="text-sm text-gray-600">
                         Description: {appointment.description}
                       </p>
                     )}
-                    <p className="text-sm text-gray-600">
-                      Status: {appointment.status || "Pending"}
-                    </p>
                   </div>
-                  <Link
-                    to={`/${userRole.toLowerCase()}/appointments/${
-                      appointment._id
+                  <button
+                    onClick={() => handleCancelAppointment(appointment._id)}
+                    className={`text-red-500 hover:text-red-700 ${
+                      cancelLoading ? "cursor-not-allowed opacity-50" : ""
                     }`}
-                    className="inline-flex items-center px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-all duration-300"
+                    disabled={
+                      appointment.status === "Cancelled" ||
+                      cancelLoading ||
+                      (appointment.client.toString() !== userId &&
+                        appointment.lawyer.toString() !== userId)
+                    }
+                    title={
+                      appointment.status === "Cancelled"
+                        ? "This appointment is already cancelled"
+                        : cancelLoading
+                        ? "Cancelling..."
+                        : appointment.client.toString() !== userId &&
+                          appointment.lawyer.toString() !== userId
+                        ? "Only the client or lawyer can cancel this appointment"
+                        : ""
+                    }
                   >
-                    View Details
-                  </Link>
+                    <X className="h-6 w-6" />
+                  </button>
                 </div>
               ))}
             </div>
+            {cancelError && (
+              <div className="mt-4 p-3 bg-red-100 text-red-700 rounded-lg">
+                {cancelError}
+              </div>
+            )}
           </div>
         ) : (
           <div className="bg-card text-card-foreground rounded-lg shadow-md p-6 text-center py-12 mb-6">
@@ -381,7 +488,7 @@ export default function AppointmentsPage({
                   <input
                     id="lawyer"
                     value={
-                      caseItem.assigned_lawyer?.username || "No lawyer assigned"
+                      form.lawyer ? "Assigned Lawyer" : "No lawyer assigned"
                     }
                     className="w-full px-4 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 bg-gray-100 cursor-not-allowed"
                     disabled
@@ -399,7 +506,9 @@ export default function AppointmentsPage({
                   </label>
                   <input
                     id="client"
-                    value={caseItem.client?.username || "No client assigned"}
+                    value={
+                      form.client ? "Assigned Client" : "No client assigned"
+                    }
                     className="w-full px-4 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 bg-gray-100 cursor-not-allowed"
                     disabled
                   />
@@ -415,7 +524,7 @@ export default function AppointmentsPage({
                 </label>
                 <input
                   id="case"
-                  value={caseItem.category || "No case selected"}
+                  value={form.case ? caseItem.category : "No case selected"}
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 bg-gray-100 cursor-not-allowed"
                   disabled
                 />
@@ -436,6 +545,7 @@ export default function AppointmentsPage({
                   min={new Date().toISOString().split("T")[0]}
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary transition-all duration-300"
                   required
+                  disabled={isBookingDisabled}
                 />
               </div>
 
@@ -451,6 +561,7 @@ export default function AppointmentsPage({
                   value={form.type}
                   onChange={(e) => setForm({ ...form, type: e.target.value })}
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary transition-all duration-300"
+                  disabled={isBookingDisabled}
                 >
                   <option value="Meeting">Meeting</option>
                   <option value="Consultation">Consultation</option>
@@ -474,6 +585,7 @@ export default function AppointmentsPage({
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary transition-all duration-300"
                   rows="3"
                   placeholder="Describe the purpose of the appointment"
+                  disabled={isBookingDisabled}
                 />
               </div>
 
@@ -483,9 +595,9 @@ export default function AppointmentsPage({
                   onClick={() => {
                     setShowForm(false);
                     setForm({
-                      lawyer: caseItem.assigned_lawyer?._id || "",
-                      client: caseItem.client?._id || "",
-                      case: caseItem._id || "",
+                      lawyer: form.lawyer,
+                      client: form.client,
+                      case: form.case,
                       date: "",
                       type: "Meeting",
                       description: "",
@@ -499,9 +611,11 @@ export default function AppointmentsPage({
                 </button>
                 <button
                   type="submit"
-                  disabled={formLoading}
-                  className={`px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-all duration-300 flex items-center ${
-                    formLoading ? "opacity-50 cursor-not-allowed" : ""
+                  disabled={formLoading || isBookingDisabled}
+                  className={`px-4 py-2 rounded-lg transition-all duration-300 flex items-center ${
+                    formLoading || isBookingDisabled
+                      ? "bg-gray-400 text-gray-200 cursor-not-allowed"
+                      : "bg-primary text-primary-foreground hover:bg-primary/90"
                   }`}
                 >
                   {formLoading ? (

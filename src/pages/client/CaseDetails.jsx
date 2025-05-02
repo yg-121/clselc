@@ -1,18 +1,6 @@
 import { useState, useEffect } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
-import {
-  File,
-  MessageSquare,
-  Calendar,
-  Plus,
-  User,
-  Edit,
-  ChevronDown,
-  ChevronUp,
-  CheckCircle,
-  X,
-  Trash2,
-} from "lucide-react";
+import {File,MessageSquare,Calendar,Plus,User,Edit,ChevronDown,ChevronUp,CheckCircle,X,Trash2,} from "lucide-react";
 import CaseDocument from "./CaseDocument";
 import AppointmentsPage from "../common/Appointments";
 
@@ -354,6 +342,7 @@ export default function CaseDetails() {
     <div className="font-inter bg-white text-gray-800 p-6 max-w-3xl mx-auto min-h-screen">
       {/* Case Overview and Client Information */}
       <div className="bg-white border border-gray-300 rounded-lg shadow-md p-6 mb-6 hover:shadow-lg hover:scale-101 transition-all duration-300">
+         {console.log(caseItem)}
         <div className="flex justify-between">
           <div className="flex-1">
             <div className="flex items-center justify-between mb-4">

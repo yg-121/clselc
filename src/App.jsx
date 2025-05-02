@@ -197,7 +197,7 @@ function AppRoutes() {
             }
           />
           <Route
-            path="/lawyer/profile"
+            path="/lawyer/profile/:lawyerId"
             element={
               <ProtectedRoute allowedRoles={["Lawyer"]}>
                 <LawyerProfile />

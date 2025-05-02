@@ -6,6 +6,7 @@ import { Search, User } from "lucide-react";
 
 export default function FindLawyers({ userRole }) {
   const [lawyers, setLawyers] = useState([]);
+  
   const [filteredLawyers, setFilteredLawyers] = useState([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [filters, setFilters] = useState({
@@ -39,23 +40,12 @@ export default function FindLawyers({ userRole }) {
         }
 
         // Build query parameters
-        const queryParams = new URLSearchParams();
-        if (filters.specialization) {
-          queryParams.append("specialization", filters.specialization);
-        }
-        if (filters.location) {
-          queryParams.append("location", filters.location);
-        }
-        if (filters.minRating) {
-          queryParams.append("minRating", filters.minRating);
-        }
-        if (filters.available) {
-          queryParams.append("available", "true");
-        }
-
+      
+console.log(token)
         const response = await fetch(
-          `http://localhost:5000/api/users/lawyers?${queryParams.toString()}`,
+          `http://localhost:5000/api/users/lawyers`,
           {
+            method: "GET",
             headers: {
               Authorization: `Bearer ${token}`,
             },
@@ -66,6 +56,9 @@ export default function FindLawyers({ userRole }) {
           const errorData = await response.json();
           if (response.status === 401 || response.status === 403) {
             throw new Error("Session expired. Please log in again.");
+          }
+          if (response.status === 500) {
+            throw new Error(errorData.message || "Failed to fetch lawyers");
           }
           throw new Error(
             errorData.message ||
@@ -91,7 +84,7 @@ export default function FindLawyers({ userRole }) {
     fetchLawyers();
   }, [filters]); // Refetch when filters change
 
-  // Filter lawyers based on search term
+  // Filter lawyers based on search term (client-side filtering)
   useEffect(() => {
     const filtered = lawyers.filter((lawyer) => {
       const searchLower = searchTerm.toLowerCase();
