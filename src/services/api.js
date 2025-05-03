@@ -28,7 +28,6 @@ export const auth = {
   login: (data) => api.post("/api/auth/login", data),
   forgotPassword: (data) => api.post("/api/auth/forgot-password", data),
   resetPassword: (data) => api.post("/api/auth/reset-password", data),
-  verify: () => api.get("/api/auth/verify"),
 }
 
 // Client endpoints

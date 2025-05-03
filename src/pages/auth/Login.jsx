@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { EyeIcon, EyeSlashIcon } from "@heroicons/react/24/solid";
-import { useAuth } from "../../context/AuthContext";
+import { useAuth } from "../../hooks/authHooks";
 
 export default function Login() {
   const [formData, setFormData] = useState({
@@ -29,7 +29,6 @@ export default function Login() {
 
     const { email, password } = formData;
     const result = await login(email, password);
-
     setIsLoading(false);
 
     if (result.success) {

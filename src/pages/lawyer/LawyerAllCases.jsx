@@ -1,7 +1,6 @@
 import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { FileText } from "lucide-react";
-
 export default function LawyerAllCases() {
   const [cases, setCases] = useState([]);
   const [loading, setLoading] = useState(true);

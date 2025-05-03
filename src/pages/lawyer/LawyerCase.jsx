@@ -240,7 +240,7 @@ export default function LawyerCase({ userName }) {
                   className="py-6 px-4 transition-all duration-300 hover:bg-gradient-to-r hover:from-primary/5 hover:to-primary/10 hover:shadow-xl hover:scale-[1.02] rounded-lg hover:border hover:border-primary/30"
                 >
                   <Link
-                    to={`/lawyer/lawyerCases/${caseItem._id}`}
+                    to={`/lawyer/lawyerCase/${caseItem._id}`}
                     className="block"
                   >
                     <div className="px-6 py-5">

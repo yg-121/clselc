@@ -15,20 +15,6 @@ import {
   Plus,
 } from "lucide-react";
 import CaseDocument from "../client/CaseDocument";
-import AppointmentsPage from "../common/Appointments";
-
-const getStatusColor = (status) => {
-  switch (status.toLowerCase()) {
-    case "posted":
-      return "bg-gradient-to-r from-amber-500 to-amber-600";
-    case "assigned":
-      return "bg-gradient-to-r from-teal-500 to-teal-600";
-    case "closed":
-      return "bg-gradient-to-r from-green-500 to-green-600";
-    default:
-      return "bg-gradient-to-r from-gray-400 to-gray-500";
-  }
-};
 
 const isOverdue = (deadlineDate) => {
   const currentDate = new Date("2025-05-03T00:00:00.000Z");
@@ -47,13 +33,26 @@ export default function CaseOnHandDetails() {
   const [closeSuccess, setCloseSuccess] = useState(null);
   const [isCloseModalOpen, setIsCloseModalOpen] = useState(false);
   const [isAddNoteModalOpen, setIsAddNoteModalOpen] = useState(false);
+  const [isAddAppointmentModalOpen, setIsAddAppointmentModalOpen] =
+    useState(false);
   const [noteForm, setNoteForm] = useState({
     content: "",
     visibility: "Both",
   });
+  const [appointmentForm, setAppointmentForm] = useState({
+    lawyer: "",
+    client: "",
+    case: id || "",
+    date: "",
+    type: "Meeting",
+    description: "",
+  });
   const [addNoteLoading, setAddNoteLoading] = useState(false);
   const [addNoteError, setAddNoteError] = useState(null);
   const [addNoteSuccess, setAddNoteSuccess] = useState(null);
+  const [addAppointmentLoading, setAddAppointmentLoading] = useState(false);
+  const [addAppointmentError, setAddAppointmentError] = useState(null);
+  const [addAppointmentSuccess, setAddAppointmentSuccess] = useState(null);
 
   const fetchCaseDetails = async () => {
     try {
@@ -179,6 +178,78 @@ export default function CaseOnHandDetails() {
     }
   };
 
+  const handleAddAppointment = async (e) => {
+    e.preventDefault();
+    try {
+      setAddAppointmentLoading(true);
+      setAddAppointmentError(null);
+      setAddAppointmentSuccess(null);
+
+      const token = localStorage.getItem("token");
+      if (!token) {
+        throw new Error("Authentication token not found. Please log in.");
+      }
+
+      const requiredFields = { date: appointmentForm.date };
+      if (
+        !localStorage.getItem("userRole") ||
+        localStorage.getItem("userRole") === "Client"
+      ) {
+        requiredFields.lawyer = appointmentForm.lawyer;
+      } else if (localStorage.getItem("userRole") === "Lawyer") {
+        requiredFields.client = appointmentForm.client;
+      }
+
+      if (
+        !requiredFields.date ||
+        !(requiredFields.lawyer || requiredFields.client)
+      ) {
+        throw new Error("Date and either lawyer or client are required");
+      }
+
+      const res = await fetch("http://localhost:5000/api/appointments", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          ...appointmentForm,
+          case: appointmentForm.case || id,
+        }),
+      });
+
+      if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(errorData.message || "Failed to create appointment.");
+      }
+
+      const data = await res.json();
+      setAddAppointmentSuccess(data.message);
+
+      setTimeout(() => {
+        setIsAddAppointmentModalOpen(false);
+        setAppointmentForm({
+          lawyer: "",
+          client: "",
+          case: id || "",
+          date: "",
+          type: "Meeting",
+          description: "",
+        });
+      }, 1500);
+    } catch (err) {
+      console.error("Error creating appointment:", err);
+      setAddAppointmentError(err.message);
+      if (err.message.includes("log in")) {
+        localStorage.removeItem("token");
+        navigate("/login");
+      }
+    } finally {
+      setAddAppointmentLoading(false);
+    }
+  };
+
   const formatDate = (dateString) => {
     const date = new Date(dateString);
     if (isNaN(date.getTime())) {
@@ -201,19 +272,6 @@ export default function CaseOnHandDetails() {
       minimumFractionDigits: 0,
       maximumFractionDigits: 0,
     }).format(amount);
-  };
-
-  const getStatusIcon = (status) => {
-    switch (status.toLowerCase()) {
-      case "posted":
-        return <Clock className="h-5 w-5 text-yellow-500" />;
-      case "assigned":
-        return <ChevronDownCircle className="h-5 w-5 text-green-500" />;
-      case "closed":
-        return <CheckCircle className="h-5 w-5 text-blue-500" />;
-      default:
-        return <Clock className="h-5 w-5 text-gray-500" />;
-    }
   };
 
   const toggleDocs = () => {
@@ -256,14 +314,6 @@ export default function CaseOnHandDetails() {
               <h1 className="text-2xl font-bold text-gray-800">
                 {caseDetail.category || "Other"}
               </h1>
-              <span
-                className={`px-4 py-1.5 text-sm text-white rounded-full ${getStatusColor(
-                  caseDetail.status
-                )}`}
-              >
-                {caseDetail.status.charAt(0).toUpperCase() +
-                  caseDetail.status.slice(1)}
-              </span>
             </div>
             <p className="text-gray-600 mb-2 italic">
               {caseDetail.description || "Untitled Case"}
@@ -418,10 +468,6 @@ export default function CaseOnHandDetails() {
                       {note.content}
                     </p>
                     <p className="text-sm text-gray-600">
-                      <span className="font-medium">Visibility:</span>{" "}
-                      {note.visibility}
-                    </p>
-                    <p className="text-sm text-gray-600">
                       <span className="font-medium">Created By:</span>{" "}
                       {note.createdBy?.username || "Unknown"}
                     </p>
@@ -545,68 +591,233 @@ export default function CaseOnHandDetails() {
         </div>
       )}
 
-      {/* Additional Deadlines */}
-      {caseDetail.additionalDeadlines &&
-        caseDetail.additionalDeadlines.length > 0 && (
-          <div className="bg-white border border-gray-300 rounded-lg shadow-md p-6 mb-6 hover:shadow-lg hover:scale-101 transition-all duration-300">
-            <h2 className="text-xl font-semibold mb-4 flex items-center text-gray-800">
-              <Calendar className="mr-2 h-5 w-5 text-gray-700" /> Additional
-              Deadlines
-            </h2>
-            <ul className="space-y-4">
-              {caseDetail.additionalDeadlines.map((deadline) => {
-                const overdue = isOverdue(deadline.deadline);
-                return (
-                  <li
-                    key={deadline._id}
-                    className={`p-4 border rounded-lg transition-all duration-300 ${
-                      overdue
-                        ? "border-red-500 bg-red-50"
-                        : "border-gray-300 hover:border-gray-500 hover:bg-gray-50"
-                    }`}
-                  >
-                    <div className="flex justify-between items-center">
-                      <div>
-                        <p className="text-sm text-gray-600">
-                          <span className="font-medium">Description:</span>{" "}
-                          {deadline.description}
-                        </p>
-                        <p className="text-sm text-gray-600">
-                          <span className="font-medium">Deadline:</span>{" "}
-                          {formatDate(deadline.deadline)}
-                        </p>
-                        <p className="text-sm text-gray-600">
-                          <span className="font-medium">Assigned To:</span>{" "}
-                          {deadline.assignedTo?.username || "Unknown"}
-                        </p>
-                      </div>
-                      <span
-                        className={`px-3 py-1 text-sm text-white rounded-full ${
-                          overdue ? "bg-red-500" : "bg-green-500"
-                        }`}
-                      >
-                        {overdue ? "Overdue" : "Upcoming"}
-                      </span>
-                    </div>
-                  </li>
-                );
-              })}
-            </ul>
-          </div>
-        )}
-
       {/* Appointments Section */}
-      {caseDetail.status === "assigned" && (
-        <AppointmentsPage
-          caseItem={caseDetail}
-          fetchCaseDetails={fetchCaseDetails}
-        />
+      <div className="bg-white border border-gray-300 rounded-lg shadow-md p-6 mb-6 hover:shadow-lg hover:scale-101 transition-all duration-300">
+        <div className="flex justify-between">
+          <div className="flex-1">
+            <h2 className="text-xl font-semibold flex items-center mb-4 text-gray-800">
+              <Calendar className="mr-2 h-5 w-5 text-gray-700" /> Appointments
+            </h2>
+            {caseDetail.appointments && caseDetail.appointments.length > 0 ? (
+              <ul className="space-y-4">
+                {caseDetail.appointments.map((appointment) => (
+                  <li
+                    key={appointment._id}
+                    className="p-4 border border-gray-300 rounded-lg hover:border-gray-500 hover:bg-gray-50 transition-all duration-300"
+                  >
+                    <p className="text-sm text-gray-600">
+                      <span className="font-medium">Date:</span>{" "}
+                      {formatDate(appointment.date)}
+                    </p>
+                    <p className="text-sm text-gray-600">
+                      <span className="font-medium">Type:</span>{" "}
+                      {appointment.type}
+                    </p>
+                    <p className="text-sm text-gray-600">
+                      <span className="font-medium">Description:</span>{" "}
+                      {appointment.description || "N/A"}
+                    </p>
+                    <p className="text-sm text-gray-600">
+                      <span className="font-medium">Status:</span>{" "}
+                      {appointment.status}
+                    </p>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-gray-600">No appointments scheduled.</p>
+            )}
+          </div>
+          <div className="flex flex-col space-y-2">
+            <button
+              onClick={() => setIsAddAppointmentModalOpen(true)}
+              className="inline-flex items-center px-4 py-2 bg-gradient-to-r from-gray-700 to-gray-800 text-white rounded-lg shadow-md hover:from-gray-800 hover:to-gray-900 hover:scale-105 transition-all duration-300"
+            >
+              <Plus className="h-4 w-4" />
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Add Appointment Modal */}
+      {isAddAppointmentModalOpen && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 w-full max-w-md shadow-lg transform transition-all duration-300 scale-100">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-xl font-semibold text-gray-800">
+                Add Appointment
+              </h2>
+              <button
+                onClick={() => {
+                  setIsAddAppointmentModalOpen(false);
+                  setAppointmentForm({
+                    lawyer: "",
+                    client: "",
+                    case: id || "",
+                    date: "",
+                    type: "Meeting",
+                    description: "",
+                  });
+                  setAddAppointmentError(null);
+                  setAddAppointmentSuccess(null);
+                }}
+                className="text-gray-500 hover:text-gray-700"
+              >
+                <X className="h-6 w-6" />
+              </button>
+            </div>
+            {addAppointmentSuccess && (
+              <div className="mb-4 p-2 bg-green-100 text-green-600 rounded-lg">
+                {addAppointmentSuccess}
+              </div>
+            )}
+            {addAppointmentError && (
+              <div className="mb-4 p-2 bg-red-100 text-red-600 rounded-lg">
+                {addAppointmentError}
+              </div>
+            )}
+            <form onSubmit={handleAddAppointment}>
+              {localStorage.getItem("userRole") === "Client" && (
+                <div className="mb-4">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Lawyer
+                  </label>
+                  <input
+                    type="text"
+                    value={appointmentForm.lawyer}
+                    onChange={(e) =>
+                      setAppointmentForm({
+                        ...appointmentForm,
+                        lawyer: e.target.value,
+                      })
+                    }
+                    className="w-full border border-gray-400 rounded-lg p-2 bg-gray-50 focus:outline-none focus:ring-2 focus:ring-gray-500 transition-all duration-300"
+                    required
+                    placeholder="Enter lawyer's username"
+                  />
+                </div>
+              )}
+              {localStorage.getItem("userRole") === "Lawyer" && (
+                <div className="mb-4">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Client
+                  </label>
+                  <input
+                    type="text"
+                    value={appointmentForm.client}
+                    onChange={(e) =>
+                      setAppointmentForm({
+                        ...appointmentForm,
+                        client: e.target.value,
+                      })
+                    }
+                    className="w-full border border-gray-400 rounded-lg p-2 bg-gray-50 focus:outline-none focus:ring-2 focus:ring-gray-500 transition-all duration-300"
+                    required
+                    placeholder="Enter client's username"
+                  />
+                </div>
+              )}
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Date
+                </label>
+                <input
+                  type="date"
+                  value={appointmentForm.date}
+                  onChange={(e) =>
+                    setAppointmentForm({
+                      ...appointmentForm,
+                      date: e.target.value,
+                    })
+                  }
+                  className="w-full border border-gray-400 rounded-lg p-2 bg-gray-50 focus:outline-none focus:ring-2 focus:ring-gray-500 transition-all duration-300"
+                  required
+                />
+              </div>
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Type
+                </label>
+                <select
+                  value={appointmentForm.type}
+                  onChange={(e) =>
+                    setAppointmentForm({
+                      ...appointmentForm,
+                      type: e.target.value,
+                    })
+                  }
+                  className="w-full border border-gray-400 rounded-lg p-2 bg-gray-50 focus:outline-none focus:ring-2 focus:ring-gray-500 transition-all duration-300"
+                >
+                  {["Meeting", "Call", "Review"].map((type) => (
+                    <option key={type} value={type}>
+                      {type}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Description
+                </label>
+                <textarea
+                  value={appointmentForm.description}
+                  onChange={(e) =>
+                    setAppointmentForm({
+                      ...appointmentForm,
+                      description: e.target.value,
+                    })
+                  }
+                  className="w-full border border-gray-400 rounded-lg p-2 bg-gray-50 focus:outline-none focus:ring-2 focus:ring-gray-500 transition-all duration-300"
+                  rows="3"
+                  placeholder="Enter description (optional)"
+                />
+              </div>
+              <div className="flex justify-end space-x-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsAddAppointmentModalOpen(false);
+                    setAppointmentForm({
+                      lawyer: "",
+                      client: "",
+                      case: id || "",
+                      date: "",
+                      type: "Meeting",
+                      description: "",
+                    });
+                    setAddAppointmentError(null);
+                    setAddAppointmentSuccess(null);
+                  }}
+                  className="px-4 py-2 bg-gradient-to-r from-gray-500 to-gray-600 text-white rounded-lg shadow-md hover:from-gray-600 hover:to-gray-700 hover:scale-105 transition-all duration-300"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={addAppointmentLoading}
+                  className={`px-4 py-2 bg-gradient-to-r from-gray-700 to-gray-800 text-white rounded-lg shadow-md hover:from-gray-800 hover:to-gray-900 hover:scale-105 transition-all duration-300 flex items-center ${
+                    addAppointmentLoading ? "opacity-50 cursor-not-allowed" : ""
+                  }`}
+                >
+                  {addAppointmentLoading ? (
+                    <>
+                      <div className="animate-spin rounded-full h-5 w-5 border-t-2 border-b-2 border-white mr-2"></div>
+                      Creating...
+                    </>
+                  ) : (
+                    "Create Appointment"
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
       )}
 
       {/* Back Button */}
       <div className="mt-6">
         <Link
-          to="/lawyer/cases"
+          to="/lawyer/lawyerCase"
           className="inline-flex items-center px-4 py-2 bg-gradient-to-r from-gray-700 to-gray-800 text-white rounded-lg shadow-md hover:from-gray-800 hover:to-gray-900 hover:scale-105 transition-all duration-300"
         >
           Back to Cases

@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react"
 import { Link, useNavigate, useLocation } from "react-router-dom"
 import { EyeIcon, EyeSlashIcon } from "@heroicons/react/24/solid"
-import { useAuth } from "../../context/AuthContext"
+import { useAuth } from "../../hooks/authHooks";
 import Button from "../../components/common/Button"
 import Input from "../../components/common/Input"
 

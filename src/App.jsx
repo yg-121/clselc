@@ -1,5 +1,12 @@
-import {BrowserRouter as Router,Routes,Route,Navigate,useLocation,} from "react-router-dom";
-import { AuthProvider, useAuth } from "./context/AuthContext";
+import {
+  BrowserRouter as Router,
+  Routes,
+  Route,
+  Navigate,
+  useLocation,
+} from "react-router-dom";
+import  {AuthProvider}  from "./context/AuthContext";
+import {useAuth} from "./hooks/authHooks"
 import Navbar from "./components/layout/Navbar";
 import Footer from "./components/layout/Footer";
 import Login from "./pages/auth/Login";
@@ -14,9 +21,9 @@ import PostCase from "./pages/client/PostCases";
 import Notification from "./pages/client/Notifications";
 import AppointmentsPage from "./pages/common/Appointments";
 import LawyerHome from "./pages/lawyer/LawyerHome";
+import CaseOnHandDetails from "./pages/lawyer/CaseOnHandDetails";
 import LawyerAllCases from "./pages/lawyer/LawyerAllCases";
 import LawyerCase from "./pages/lawyer/LawyerCase";
-import CaseOnHandDetails from "./pages/lawyer/LawyerCase";
 import LawyerCaseDetails from "./pages/lawyer/LawyerCaseDetails";
 import CaseAnalytics from "./pages/lawyer/CaseAnalytics";
 import MyBids from "./pages/lawyer/MyBids";
@@ -24,10 +31,31 @@ import LawyerProfile from "./pages/lawyer/LawyerProfile";
 import AdminDashboard from "./pages/dashboard/AdminDashboard";
 import MessagesPage from "./pages/common/Messages";
 
+// Not Found Component
+const NotFound = () => {
+  return (
+    <div className="flex flex-col items-center justify-center min-h-screen bg-gray-100">
+      <h1 className="text-4xl font-bold text-gray-800 mb-4">
+        404 - Page Not Found
+      </h1>
+      <p className="text-lg text-gray-600 mb-8">
+        The page you're looking for doesn't exist.
+      </p>
+      <a
+        href="/"
+        className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+      >
+        Return to Home
+      </a>
+    </div>
+  );
+};
+
+
+
 // Protected route component
 const ProtectedRoute = ({ children, allowedRoles }) => {
-  const { user, loading } = useAuth();
-
+const { user, loading } = useAuth();
   if (loading) {
     return (
       <div className="flex justify-center items-center h-screen">
@@ -35,10 +63,12 @@ const ProtectedRoute = ({ children, allowedRoles }) => {
       </div>
     );
   }
+console.log("not found", loading, user);
 
   if (!user) {
     return <Navigate to="/login" />;
   }
+console.log("found", loading);
 
   if (allowedRoles && !allowedRoles.includes(user.role)) {
     return <Navigate to="/" />;
@@ -221,7 +251,7 @@ function AppRoutes() {
               </ProtectedRoute>
             }
           />
-          <Route path="*" element={<Navigate to="/" />} />
+          <Route path="*" element={<NotFound />} />
         </Routes>
       </main>
       {!hideNavbarFooter && <Footer />}
