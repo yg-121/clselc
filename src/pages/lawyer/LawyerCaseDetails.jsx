@@ -26,7 +26,6 @@ const getStatusColor = (status) => {
   }
 };
 
-
 export default function LawyerCaseDetails() {
   const { id } = useParams();
   const [caseItem, setCaseItem] = useState(null);
@@ -71,55 +70,53 @@ export default function LawyerCaseDetails() {
     fetchLawyerCaseDetails();
   }, [id]);
 
- 
   const toggleDocs = () => {
     setIsDocsOpen(!isDocsOpen);
   };
-const handleSubmit = async (e) => {
-  e.preventDefault();
-  setBidError(null);
-  setBidSuccess(null);
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setBidError(null);
+    setBidSuccess(null);
 
-  try {
-    const token = localStorage.getItem("token");
-    if (!token) {
-      throw new Error("Authentication token not found. Please log in.");
-    }
-
-    const res = await fetch("http://localhost:5000/api/bids", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify({
-        case: id, // caseId from useParams
-        amount: parseFloat(amount),
-        comment,
-      }),
-    });
-
-    const text = await res.text();
-    if (!res.ok) {
-      let errorData;
-      try {
-        errorData = JSON.parse(text);
-      } catch {
-        throw new Error(`Server error: ${text} (Status: ${res.status})`);
+    try {
+      const token = localStorage.getItem("token");
+      if (!token) {
+        throw new Error("Authentication token not found. Please log in.");
       }
-      throw new Error(errorData.message || `HTTP error ${res.status}`);
+
+      const res = await fetch("http://localhost:5000/api/bids", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          case: id, // caseId from useParams
+          amount: parseFloat(amount),
+          comment,
+        }),
+      });
+
+      const text = await res.text();
+      if (!res.ok) {
+        let errorData;
+        try {
+          errorData = JSON.parse(text);
+        } catch {
+          throw new Error(`Server error: ${text} (Status: ${res.status})`);
+        }
+        throw new Error(errorData.message || `HTTP error ${res.status}`);
+      }
+
+      const data = JSON.parse(text);
+      setBidSuccess("Bid submitted successfully!");
+      setAmount("");
+      setComment("");
+    } catch (err) {
+      console.error("Error submitting bid:", err);
+      setBidError(err.message);
     }
-
-    const data = JSON.parse(text);
-    setBidSuccess("Bid submitted successfully!");
-    setAmount("");
-    setComment("");
-  } catch (err) {
-    console.error("Error submitting bid:", err);
-    setBidError(err.message);
-  }
-};
-
+  };
 
   if (loading) {
     return (
@@ -279,8 +276,6 @@ const handleSubmit = async (e) => {
     </div>
   );
 }
-
-
 
 <div className="mt-6">
   <h2 className="text-xl font-semibold mb-4">Submit a Bid</h2>

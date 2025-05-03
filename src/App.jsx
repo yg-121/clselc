@@ -16,6 +16,7 @@ import AppointmentsPage from "./pages/common/Appointments";
 import LawyerHome from "./pages/lawyer/LawyerHome";
 import LawyerAllCases from "./pages/lawyer/LawyerAllCases";
 import LawyerCase from "./pages/lawyer/LawyerCase";
+import CaseOnHandDetails from "./pages/lawyer/LawyerCase";
 import LawyerCaseDetails from "./pages/lawyer/LawyerCaseDetails";
 import CaseAnalytics from "./pages/lawyer/CaseAnalytics";
 import MyBids from "./pages/lawyer/MyBids";
@@ -161,6 +162,14 @@ function AppRoutes() {
             element={
               <ProtectedRoute allowedRoles={["Lawyer"]}>
                 <LawyerCase />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/lawyer/lawyerCase/:id"
+            element={
+              <ProtectedRoute allowedRoles={["Lawyer"]}>
+                <CaseOnHandDetails />
               </ProtectedRoute>
             }
           />

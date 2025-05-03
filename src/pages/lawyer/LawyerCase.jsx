@@ -8,9 +8,7 @@ import {
   Filter,
   Calendar,
   CheckCircle,
-  ChevronRight,
   ChevronDownCircle,
-  BarChart2,
 } from "lucide-react";
 import { jwtDecode } from "jwt-decode";
 
@@ -89,29 +87,9 @@ export default function LawyerCase({ userName }) {
           console.log("No assigned cases found for this lawyer.");
         }
 
-        // Map backend case data to frontend format
-        const mappedCases = assignedCases.map((caseItem) => {
-          console.log("Mapping case:", caseItem);
-          return {
-            id: caseItem._id || "unknown-id",
-            caseId: caseItem._id || "N/A",
-            caseTitle: caseItem.description || "Untitled Case",
-            clientName: caseItem.client?.username || "Unknown Client",
-            amount: caseItem.winning_bid?.amount || 0,
-            submittedDate: caseItem.createdAt || new Date().toISOString(),
-            expiryDate: caseItem.deadline || new Date().toISOString(),
-            status: mapStatus(caseItem.status || "posted"),
-            notes:
-              caseItem.notes && caseItem.notes.length > 0
-                ? caseItem.notes[0].content
-                : "No notes available.",
-            category: caseItem.category || "Other",
-          };
-        });
-
-        console.log("Mapped cases:", mappedCases);
-        setCases(mappedCases);
-        setFilteredCase(mappedCases);
+        console.log("Assigned cases:", assignedCases);
+        setCases(assignedCases);
+        setFilteredCase(assignedCases);
       } catch (err) {
         console.error("Error fetching cases:", err);
         setError(err.message);
@@ -147,10 +125,11 @@ export default function LawyerCase({ userName }) {
       setFilteredCase(cases);
     } else {
       const filtered = cases.filter(
-        (caseItem) => caseItem.status === selectedStatus
+        (caseItem) => mapStatus(caseItem.status) === selectedStatus
       );
       setFilteredCase(filtered);
     }
+    console.log("Filtered cases:", filteredCase); // Debugging
   }, [selectedStatus, cases]);
 
   const formatDate = (dateString) => {
@@ -252,79 +231,85 @@ export default function LawyerCase({ userName }) {
         </div>
 
         {/* Case List */}
-        {filteredCase.length > 0 ? (
-          <div className="bg-card text-card-foreground shadow-md rounded-lg overflow-hidden hover:shadow-lg hover:bg-gradient-to-r hover:from-primary/5 hover:to-primary/10 transition-all duration-300">
-            <ul className="divide-y divide-gray-200">
+        {filteredCase.length ? (
+          <div className="bg-card text-card-foreground rounded-lg shadow-md p-8">
+            <ul className="divide-y divide-border">
               {filteredCase.map((caseItem) => (
-                <li key={caseItem.id} className="hover:bg-gray-50">
-                  <div className="px-6 py-5">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center">
-                        <div className="flex-shrink-0">
-                          <div className="h-12 w-12 rounded-full bg-purple-100 flex items-center justify-center">
-                            <Briefcase className="h-6 w-6 text-primary" />
+                <li
+                  key={caseItem._id}
+                  className="py-6 px-4 transition-all duration-300 hover:bg-gradient-to-r hover:from-primary/5 hover:to-primary/10 hover:shadow-xl hover:scale-[1.02] rounded-lg hover:border hover:border-primary/30"
+                >
+                  <Link
+                    to={`/lawyer/lawyerCases/${caseItem._id}`}
+                    className="block"
+                  >
+                    <div className="px-6 py-5">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center">
+                          <div className="flex-shrink-0">
+                            <div className="h-12 w-12 rounded-full bg-purple-100 flex items-center justify-center">
+                              <Briefcase className="h-6 w-6 text-primary" />
+                            </div>
+                          </div>
+                          <div className="ml-4">
+                            <div className="flex items-center">
+                              {getStatusIcon(mapStatus(caseItem.status))}
+                              <span
+                                className={`ml-2 px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(
+                                  mapStatus(caseItem.status)
+                                )}`}
+                              >
+                                {mapStatus(caseItem.status)
+                                  .charAt(0)
+                                  .toUpperCase() +
+                                  mapStatus(caseItem.status).slice(1)}
+                              </span>
+                            </div>
+                            <div className="mt-1 text-sm text-gray-500">
+                              <span className="flex items-center">
+                                <FileText className="mr-1 h-4 w-4 text-gray-400" />
+                                Client:{" "}
+                                {caseItem.client?.username || "Unknown Client"}
+                              </span>
+                            </div>
+                            <div className="mt-1 flex items-center text-sm text-gray-500">
+                              <DollarSign className="mr-1 h-4 w-4 text-gray-400" />
+                              Bid Amount:{" "}
+                              {formatCurrency(
+                                caseItem.winning_bid?.amount || 0
+                              )}
+                            </div>
                           </div>
                         </div>
-                        <div className="ml-4">
-                          <div className="flex items-center">
-                            {getStatusIcon(caseItem.status)}
-                            <span
-                              className={`ml-2 px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(
-                                caseItem.status
-                              )}`}
-                            >
-                              {caseItem.status.charAt(0).toUpperCase() +
-                                caseItem.status.slice(1)}
-                            </span>
+                        <div className="flex flex-col items-end">
+                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 mb-2">
+                            {caseItem.category || "Other"}
+                          </span>
+                          <div className="flex items-center text-sm text-gray-500">
+                            <Clock className="mr-1 h-4 w-4 text-gray-400" />
+                            Started Date:{" "}
+                            {formatDate(
+                              caseItem.createdAt || new Date().toISOString()
+                            )}
                           </div>
-                          <div className="mt-1 text-sm text-gray-500">
-                            <span className="flex items-center">
-                              <FileText className="mr-1 h-4 w-4 text-gray-400" />
-                              Client: {caseItem.clientName}
-                            </span>
-                          </div>
-                          <div className="mt-1 flex items-center text-sm text-gray-500">
-                            <DollarSign className="mr-1 h-4 w-4 text-gray-400" />
-                            Bid Amount: {formatCurrency(caseItem.amount)}
+                          <div className="flex items-center text-sm text-gray-500 mt-1">
+                            <Calendar className="mr-1 h-4 w-4 text-gray-400" />
+                            Expected to End:{" "}
+                            {formatDate(
+                              caseItem.deadline || new Date().toISOString()
+                            )}
                           </div>
                         </div>
                       </div>
-                      <div className="flex flex-col items-end">
-                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 mb-2">
-                          {caseItem.category}
-                        </span>
-                        <div className="flex items-center text-sm text-gray-500">
-                          <Clock className="mr-1 h-4 w-4 text-gray-400" />
-                          Started Date: {formatDate(caseItem.submittedDate)}
-                        </div>
-                        <div className="flex items-center text-sm text-gray-500 mt-1">
-                          <Calendar className="mr-1 h-4 w-4 text-gray-400" />
-                          Expected to End: {formatDate(caseItem.expiryDate)}
-                        </div>
-                        <div className="flex space-x-2 mt-2">
-                          <Link
-                            to={`/lawyer/cases/${caseItem.id}`}
-                            className="flex items-center text-sm text-primary hover:underline"
-                          >
-                            <ChevronRight className="h-5 w-5 text-gray-400 mr-1" />
-                            Details
-                          </Link>
-                          <Link
-                            to={`/lawyer/cases/${caseItem.id}/analytics`}
-                            className="flex items-center text-sm text-primary hover:underline"
-                          >
-                            <BarChart2 className="h-5 w-5 text-gray-400 mr-1" />
-                            Analytics
-                          </Link>
-                        </div>
+                      <div className="mt-2 ml-16">
+                        <p className="text-sm text-gray-600 line-clamp-2">
+                          {caseItem.notes && caseItem.notes.length > 0
+                            ? caseItem.notes[0].content
+                            : "No notes available."}
+                        </p>
                       </div>
                     </div>
-                    <div className="mt-2 ml-16">
-                      <p className="text-sm text-gray-600 line-clamp-2">
-                        {caseItem.notes}
-                      </p>
-                    </div>
-                  </div>
+                  </Link>
                 </li>
               ))}
             </ul>
@@ -340,20 +325,6 @@ export default function LawyerCase({ userName }) {
                 ? "You haven't any cases yet."
                 : `You don't have any ${selectedStatus} cases.`}
             </p>
-            {selectedStatus !== "all" ? (
-              <button
-                onClick={() => setSelectedStatus("all")}
-                className="inline-flex items-center px-4 py-2 border border-gray-200 rounded-lg text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 mr-3"
-              >
-                View All Cases
-              </button>
-            ) : null}
-            <Link
-              to="/lawyer/cases/available"
-              className="inline-flex items-center px-4 py-2 border border-transparent rounded-lg text-sm font-medium text-primary-foreground bg-primary hover:bg-primary/90"
-            >
-              Browse Available Cases
-            </Link>
           </div>
         )}
 
