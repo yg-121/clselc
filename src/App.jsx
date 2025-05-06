@@ -18,6 +18,7 @@ import FindLawyers from "./pages/client/FindLawyer";
 import MyCases from "./pages/client/MyCases";
 import CaseDetails from "./pages/client/CaseDetails";
 import PostCase from "./pages/client/PostCases";
+import ClientLawyerProfile from "./pages/client/clientLawyer";
 import Notification from "./pages/client/Notifications";
 import AppointmentsPage from "./pages/common/Appointments";
 import LawyerHome from "./pages/lawyer/LawyerHome";
@@ -28,7 +29,7 @@ import LawyerCaseDetails from "./pages/lawyer/LawyerCaseDetails";
 import CaseAnalytics from "./pages/lawyer/CaseAnalytics";
 import MyBids from "./pages/lawyer/MyBids";
 import LawyerProfile from "./pages/lawyer/LawyerProfile";
-import AdminDashboard from "./pages/dashboard/AdminDashboard";
+import AdminDashboard from "./components/dashboard/AdminDashboard";
 import MessagesPage from "./pages/common/Messages";
 
 // Not Found Component
@@ -55,7 +56,8 @@ const NotFound = () => {
 
 // Protected route component
 const ProtectedRoute = ({ children, allowedRoles }) => {
-const { user, loading } = useAuth();
+  const { user, loading } = useAuth();
+  
   if (loading) {
     return (
       <div className="flex justify-center items-center h-screen">
@@ -63,15 +65,23 @@ const { user, loading } = useAuth();
       </div>
     );
   }
-console.log("not found", loading, user);
 
   if (!user) {
     return <Navigate to="/login" />;
   }
-console.log("found", loading);
 
   if (allowedRoles && !allowedRoles.includes(user.role)) {
-    return <Navigate to="/" />;
+    // Redirect to appropriate dashboard based on role
+    if (user.role === "Client") {
+      return <Navigate to="/client/home" replace />;
+    } else if (user.role === "Lawyer") {
+      return <Navigate to="/lawyer/home" replace />;
+    } else if (user.role === "Admin") {
+      return <Navigate to="/dashboard/admin" replace />;
+    } else {
+      // Fallback to login if role is unknown
+      return <Navigate to="/login" replace />;
+    }
   }
 
   return children;
@@ -162,6 +172,14 @@ function AppRoutes() {
               </ProtectedRoute>
             }
           />
+          <Route
+            path="/client/lawyer/:lawyerId"
+            element={
+              <ProtectedRoute allowedRoles={["Lawyer"]}>
+                <ClientLawyerProfile />
+              </ProtectedRoute>
+            }
+          />
           {/* Lawyer route */}
           <Route
             path="/lawyer/home"
@@ -212,7 +230,7 @@ function AppRoutes() {
             }
           />
           <Route
-            path="/lawyer/bids"
+            path="/lawyer/my-bids"
             element={
               <ProtectedRoute allowedRoles={["Lawyer"]}>
                 <MyBids />
@@ -244,7 +262,7 @@ function AppRoutes() {
             }
           />
           <Route
-            path="/admin"
+            path="/dashboard/admin/*"
             element={
               <ProtectedRoute allowedRoles={["Admin"]}>
                 <AdminDashboard />
@@ -270,3 +288,7 @@ function App() {
 }
 
 export default App;
+
+
+
+

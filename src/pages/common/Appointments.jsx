@@ -96,7 +96,7 @@ export default function AppointmentsPage({
         }
 
         const data = await response.json();
-        console.log("Fetched case details:", data); // Debug log
+        // console.log("Fetched case details:", data); // Debug log
         setForm((prevForm) => ({
           ...prevForm,
           lawyer: data.case.assigned_lawyer?._id || "",
@@ -128,7 +128,7 @@ export default function AppointmentsPage({
         setError(null);
 
         const token = localStorage.getItem("token");
-        const response = await fetch("http://localhost:5000/api/appointments", {
+        const response = await fetch(`http://localhost:5000/api/appointments/case/${caseItem._id}`, {
           headers: {
             Authorization: `Bearer ${token}`,
           },
@@ -143,6 +143,7 @@ export default function AppointmentsPage({
         }
 
         const data = await response.json();
+        console.log("fetched appoinmente",data)
         setAppointments(data.appointments || []);
       } catch (err) {
         console.error("Error fetching appointments:", err);
@@ -185,7 +186,7 @@ export default function AppointmentsPage({
         date: date.toISOString().split("T")[0],
         type: form.type || "Meeting",
         description: form.description || undefined,
-        case: form.case || undefined,
+        case: caseItem._id,
       };
 
       console.log("Payload being sent:", payload); // Debug log
@@ -515,20 +516,6 @@ export default function AppointmentsPage({
                 </div>
               )}
 
-              <div className="mb-4">
-                <label
-                  htmlFor="case"
-                  className="block text-sm font-medium text-gray-700 mb-1"
-                >
-                  Case
-                </label>
-                <input
-                  id="case"
-                  value={form.case ? caseItem.category : "No case selected"}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 bg-gray-100 cursor-not-allowed"
-                  disabled
-                />
-              </div>
 
               <div className="mb-4">
                 <label
@@ -597,7 +584,7 @@ export default function AppointmentsPage({
                     setForm({
                       lawyer: form.lawyer,
                       client: form.client,
-                      case: form.case,
+                      case: caseItem._id,
                       date: "",
                       type: "Meeting",
                       description: "",

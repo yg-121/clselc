@@ -1,17 +1,33 @@
 import { useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../../hooks/authHooks";
-import { Menu, X, User, LogOut, Bell } from "lucide-react";
-
+import { Menu, X, User, LogOut, Bell, AlertTriangle } from "lucide-react";
 export default function Navbar() {
   const { user, logout } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
 
   // Mock unread notifications count
   const unreadNotifications = 3;
 
+  const handleLogoutClick = () => {
+    setShowLogoutConfirm(true);
+  };
+
+  const handleLogoutConfirm = () => {
+    logout();
+    navigate("/login");
+    setMobileMenuOpen(false);
+    setShowLogoutConfirm(false);
+  };
+
+  const handleLogoutCancel = () => {
+    setShowLogoutConfirm(false);
+  };
+
+  // Original handleLogout function (keep this for backward compatibility)
   const handleLogout = () => {
     logout();
     navigate("/login");
@@ -31,7 +47,7 @@ export default function Navbar() {
     { name: "Home", href: "/lawyer/home" },
     { name: "Cases", href: "/lawyer/all-cases" },
     { name: "Cases On Hand", href: "/lawyer/lawyerCase" },
-    { name: "My Bids", href: "/lawyer/bids" },
+    { name: "My Bids", href: "/lawyer/my-bids" },
     // { name: "Appointments", href: "/lawyer/appointments" },
     { name: "Messages", href: "/lawyer/messages" },
   ];
@@ -120,9 +136,9 @@ export default function Navbar() {
                   <User className="h-6 w-6" />
                   <span className="sr-only">Profile</span>
                 </Link>
-                {/* Logout Button */}
+                {/* Logout Button - Desktop */}
                 <button
-                  onClick={handleLogout}
+                  onClick={handleLogoutClick}
                   className="text-gray-800 hover:text-gray-600 p-2 rounded-full hover:bg-gray-100 transition-all duration-300"
                 >
                   <LogOut className="h-6 w-6" />
@@ -221,7 +237,7 @@ export default function Navbar() {
                   Profile
                 </Link>
                 <button
-                  onClick={handleLogout}
+                  onClick={handleLogoutClick}
                   className="block w-full text-left px-3 py-2 rounded-md text-base font-medium text-gray-800 hover:text-gray-600 flex items-center"
                 >
                   <LogOut className="h-5 w-5 mr-2" />
@@ -250,6 +266,40 @@ export default function Navbar() {
           </div>
         </div>
       )}
+
+      {/* Logout Confirmation Modal */}
+      {showLogoutConfirm && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50" onClick={handleLogoutCancel}>
+          <div className="bg-white rounded-lg p-6 w-full max-w-md shadow-lg" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center mb-4">
+              <AlertTriangle className="h-6 w-6 text-amber-500 mr-2" />
+              <h3 className="text-xl font-semibold text-gray-800">
+                Confirm Logout
+              </h3>
+            </div>
+            <p className="text-gray-600 mb-6">
+              Are you sure you want to log out? You will need to log in again to access your account.
+            </p>
+            <div className="flex justify-end space-x-2">
+              <button
+                onClick={handleLogoutCancel}
+                className="px-4 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 transition-colors duration-300"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleLogoutConfirm}
+                className="px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors duration-300 flex items-center"
+              >
+                <LogOut className="h-4 w-4 mr-2" />
+                Logout
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </nav>
   );
 }
+
+

@@ -145,26 +145,16 @@ export default function CaseDocument({
         </div>
       )}
 
-      {/* Confirmation Popup */}
+      {/* Delete Confirmation Popup */}
       {showPopup && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 w-full max-w-md shadow-lg transform transition-all duration-300 scale-100">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-xl font-semibold text-gray-800">
-                Confirm Deletion
-              </h3>
-              <button
-                onClick={handleCancelDelete}
-                className="text-gray-500 hover:text-gray-700"
-              >
-                <Trash className="h-6 w-6" />
-              </button>
-            </div>
-            <p className="text-gray-600 mb-6">
+          <div className="bg-white rounded-lg shadow-xl p-6 max-w-md w-full">
+            <h3 className="text-lg font-semibold mb-4">Confirm Deletion</h3>
+            <p className="mb-6">
               Are you sure you want to delete this document? This action cannot
               be undone.
             </p>
-            <div className="flex justify-end space-x-2">
+            <div className="flex justify-end space-x-4">
               <button
                 onClick={handleCancelDelete}
                 className="px-4 py-2 bg-gradient-to-r from-gray-500 to-gray-600 text-white rounded-lg shadow-md hover:from-gray-600 hover:to-gray-700 hover:scale-105 transition-all duration-300"

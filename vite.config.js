@@ -12,5 +12,8 @@ export default defineConfig({
         secure: false,
       },
     },
+    // Add historyApiFallback for client-side routing
+    historyApiFallback: true,
   },
 });
+

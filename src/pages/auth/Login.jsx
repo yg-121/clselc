@@ -38,7 +38,7 @@ export default function Login() {
       } else if (role === "Lawyer") {
         navigate("/lawyer/home");
       } else if (role === "Admin") {
-        navigate("/admin");
+        navigate("/dashboard/admin");
       }
     } else {
       setError(result.message);
@@ -266,3 +266,5 @@ export default function Login() {
     </div>
   );
 }
+
+

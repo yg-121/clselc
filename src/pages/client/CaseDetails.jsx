@@ -141,12 +141,31 @@ export default function CaseDetails() {
       }
 
       const data = await res.json();
-      setAcceptSuccess(data.message);
+      setAcceptSuccess("Bid accepted successfully!");
+      
+      // Update the local state to reflect the changes
+      setBids(prevBids => 
+        prevBids.map(bid => ({
+          ...bid,
+          status: bid._id === bidId ? 'Accepted' : 'Rejected'
+        }))
+      );
+      
+      // Update case status in the UI
+      setCaseItem(prevCase => ({
+        ...prevCase,
+        status: 'Assigned',
+        winning_bid: bidId,
+        assigned_lawyer: data.bid.lawyer
+      }));
 
-      await fetchCaseDetails();
-    } catch (err) {
-      console.error("Error accepting bid:", err);
-      setAcceptError(err.message);
+      // Reload the page after a short delay to show the updated status
+      setTimeout(() => {
+        window.location.reload();
+      }, 2000);
+    } catch (error) {
+      console.error("Error accepting bid:", error);
+      setAcceptError(error.message);
     } finally {
       setAcceptLoading(null);
     }

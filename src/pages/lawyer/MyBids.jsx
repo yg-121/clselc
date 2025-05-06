@@ -2,400 +2,558 @@ import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import {
   DollarSign,
-  Clock,
-  FileText,
-  Filter,
   Calendar,
+  Clock,
+  AlertTriangle,
+  Search,
+  Filter,
   CheckCircle,
   XCircle,
-  ChevronRight,
+  AlertCircle,
+  Info,
+  X,
+  User,
+  Award,
 } from "lucide-react";
-import { jwtDecode } from "jwt-decode";
 
-export default function MyBids({ userName }) {
+export default function MyBids() {
   const [bids, setBids] = useState([]);
   const [filteredBids, setFilteredBids] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [selectedStatus, setSelectedStatus] = useState("all");
+  const [searchTerm, setSearchTerm] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [sortOrder, setSortOrder] = useState("newest");
   const [userId, setUserId] = useState(null);
+  
+  // Add state for the popup
+  const [selectedBid, setSelectedBid] = useState(null);
+  const [showPopup, setShowPopup] = useState(false);
 
-  // Decode token to get userId
-  useEffect(() => {
-    const token = localStorage.getItem("token");
-    if (!token) {
-      setError("Authentication token not found. Please log in.");
-      setLoading(false);
-      window.location.href = "/login";
-      return;
-    }
-
-    try {
-      const decoded = jwtDecode(token);
-      if (!decoded.id) {
-        throw new Error("User ID not found in token.");
-      }
-      setUserId(decoded.id);
-      console.log("Decoded userId:", decoded.id);
-    } catch (err) {
-      console.error("Error decoding token:", err);
-      setError("Failed to authenticate. Please log in again.");
-      setLoading(false);
-      localStorage.removeItem("token");
-      window.location.href = "/login";
-    }
-  }, []);
-
-  // Fetch bids from backend
-  useEffect(() => {
-    if (!userId) return;
-
-    const fetchBids = async () => {
-      try {
-        setLoading(true);
-        setError(null);
-
-        const token = localStorage.getItem("token");
-        const response = await fetch("http://localhost:5000/api/bids/my-bids", {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        });
-
-        if (!response.ok) {
-          const errorData = await response.json();
-          if (response.status === 401 || response.status === 403) {
-            throw new Error("Session expired. Please log in again.");
-          }
-          throw new Error(errorData.message || "Failed to fetch bids.");
-        }
-
-        const data = await response.json();
-        console.log("API response:", data);
-
-        // Validate bids data
-        if (!Array.isArray(data.bids)) {
-          throw new Error("Invalid response: bids is not an array.");
-        }
-
-        // Map backend bid data to frontend format
-        const mappedBids = data.bids.map((bid) => {
-          console.log("Mapping bid:", bid);
-          return {
-            id: bid._id || "unknown-id",
-            caseId: bid.case?._id || "N/A",
-            caseTitle: bid.case?.description || "Unknown Case",
-            clientName: bid.client?.username || "Unknown Client",
-            amount: bid.amount || 0,
-            submittedDate: bid.submittedDate || new Date().toISOString(),
-            expiryDate: bid.expiryDate || new Date().toISOString(),
-            status: bid.status || "pending",
-            notes: bid.notes || "No notes provided",
-            category: bid.case?.category || "Uncategorized",
-          };
-        });
-
-        // Sort bids by submittedDate in descending order (latest first)
-        mappedBids.sort(
-          (a, b) => new Date(b.submittedDate) - new Date(a.submittedDate)
-        );
-
-        console.log("Mapped and sorted bids:", mappedBids);
-        setBids(mappedBids);
-        setFilteredBids(mappedBids);
-      } catch (err) {
-        console.error("Error fetching bids:", err);
-        setError(err.message);
-        if (err.message.includes("log in")) {
-          localStorage.removeItem("token");
-          window.location.href = "/login";
-        }
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchBids();
-  }, [userId]);
-
-  useEffect(() => {
-    // Filter bids based on selected status and maintain sorting
-    let result = [...bids]; // Create a copy to avoid mutating the original bids array
-    if (selectedStatus !== "all") {
-      result = result.filter((bid) => bid.status === selectedStatus);
-    }
-    // Re-sort the filtered results by submittedDate (latest first)
-    result.sort(
-      (a, b) => new Date(b.submittedDate) - new Date(a.submittedDate)
-    );
-    setFilteredBids(result);
-  }, [selectedStatus, bids]);
-
-  const formatDate = (dateString) => {
-    const date = new Date(dateString);
-    if (isNaN(date.getTime())) {
-      return "Invalid Date";
-    }
-    return new Intl.DateTimeFormat("en-US", {
-      month: "short",
-      day: "numeric",
-      year: "numeric",
-    }).format(date);
+  // Function to open the popup
+  const openBidDetails = (bid) => {
+    setSelectedBid(bid);
+    setShowPopup(true);
   };
 
-  const formatCurrency = (amount) => {
-    if (typeof amount !== "number") {
-      return "N/A";
-    }
-    return new Intl.NumberFormat("en-US", {
-      style: "currency",
-      currency: "ETB",
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0,
-    }).format(amount);
+  // Function to close the popup
+  const closePopup = () => {
+    setShowPopup(false);
+    setSelectedBid(null);
   };
 
+  // Helper function to get status icon
   const getStatusIcon = (status) => {
-    switch (status) {
-      case "pending":
-        return <Clock className="h-5 w-5 text-yellow-500" />;
+    switch (status?.toLowerCase()) {
       case "accepted":
         return <CheckCircle className="h-5 w-5 text-green-500" />;
       case "rejected":
         return <XCircle className="h-5 w-5 text-red-500" />;
+      case "pending":
       default:
-        return <Clock className="h-5 w-5 text-gray-500" />;
+        return <Clock className="h-5 w-5 text-amber-500" />;
     }
   };
 
-  const getStatusColor = (status) => {
-    switch (status) {
-      case "pending":
-        return "bg-yellow-100 text-yellow-800 border-yellow-200 shadow-sm hover:bg-yellow-200";
+  // Helper function to get status badge color
+  const getStatusBadgeColor = (status) => {
+    switch (status?.toLowerCase()) {
       case "accepted":
-        return "bg-green-100 text-green-800 border-green-200 shadow-sm hover:bg-green-200";
+        return "border-green-200 bg-green-50 text-green-700";
       case "rejected":
-        return "bg-red-100 text-red-800 border-red-200 shadow-sm hover:bg-red-200";
+        return "border-red-200 bg-red-50 text-red-700";
+      case "pending":
       default:
-        return "bg-gray-100 text-gray-800 border-gray-200 shadow-sm hover:bg-gray-200";
+        return "border-amber-200 bg-amber-50 text-amber-700";
     }
   };
 
-  const getCardStatusColor = (status) => {
-    switch (status) {
-      case "pending":
-        return "bg-yellow-50 border-l-4 border-yellow-200 hover:bg-yellow-100";
-      case "accepted":
-        return "bg-green-50 border-l-4 border-green-200 hover:bg-green-100";
-      case "rejected":
-        return "bg-red-50 border-l-4 border-red-200 hover:bg-red-100";
-      default:
-        return "bg-gray-50 border-l-4 border-gray-200 hover:bg-gray-100";
+  // Add a refresh function to the MyBids component
+  const refreshBids = () => {
+    fetchBids();
+  };
+
+  useEffect(() => {
+    // Get user ID from localStorage
+    const userData = localStorage.getItem("user");
+    let parsedUserId = null;
+    
+    if (userData) {
+      try {
+        const parsedUser = JSON.parse(userData);
+        if (parsedUser && parsedUser._id) {
+          setUserId(parsedUser._id);
+          parsedUserId = parsedUser._id;
+        }
+      } catch (err) {
+        console.error("Error parsing user data:", err);
+        // Continue with the fetch even if we can't parse the user data
+      }
+    }
+
+    fetchBids();
+  }, []);  // Remove userId dependency to avoid refetching issues
+
+  const fetchBids = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+
+      const token = localStorage.getItem("token");
+      if (!token) {
+        throw new Error("Authentication token not found. Please log in.");
+      }
+
+      const response = await fetch("http://localhost:5000/api/bids/my-bids", {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        if (response.status === 401 || response.status === 403) {
+          throw new Error("Session expired. Please log in again.");
+        }
+        throw new Error(errorData.message || "Failed to fetch bids.");
+      }
+
+      const data = await response.json();
+      console.log("API response:", data);
+
+      // Validate bids data
+      if (!Array.isArray(data.bids)) {
+        throw new Error("Invalid response: bids is not an array.");
+      }
+
+      // Map the bids to a more usable format with null/undefined checks
+      const mappedBids = data.bids.map((bid) => {
+        // Ensure bid and case exist
+        if (!bid || !bid.case) {
+          return {
+            id: bid?._id || "unknown",
+            caseId: "unknown",
+            caseTitle: "Unknown Case",
+            caseDescription: "No description available",
+            amount: bid?.amount || 0,
+            comment: bid?.comment || "",
+            status: bid?.status || "Pending",
+            submittedDate: bid?.createdAt || new Date().toISOString(),
+            deadline: "Not specified",
+            clientName: "Unknown Client",
+          };
+        }
+        
+        return {
+          id: bid._id || "unknown",
+          caseId: bid.case._id || "unknown",
+          caseTitle: bid.case.category || "Unknown Case",
+          caseDescription: bid.case.description || "No description available",
+          amount: bid.amount || 0,
+          comment: bid.comment || "",
+          status: bid.status || "Pending",
+          submittedDate: bid.createdAt || new Date().toISOString(),
+          deadline: bid.case.deadline || "Not specified",
+          clientName: bid.case.client?.username || "Anonymous",
+        };
+      });
+
+      // Sort bids by submittedDate in descending order (latest first)
+      mappedBids.sort(
+        (a, b) => new Date(b.submittedDate) - new Date(a.submittedDate)
+      );
+
+      console.log("Mapped and sorted bids:", mappedBids);
+      setBids(mappedBids);
+      setFilteredBids(mappedBids);
+    } catch (err) {
+      console.error("Error fetching bids:", err);
+      setError(err.message);
+      if (err.message.includes("log in")) {
+        localStorage.removeItem("token");
+        window.location.href = "/login";
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Filter and sort bids when search term, status filter, or sort order changes
+  useEffect(() => {
+    let result = [...bids];
+
+    // Apply search filter
+    if (searchTerm) {
+      const lowerCaseSearchTerm = searchTerm.toLowerCase();
+      result = result.filter(
+        (bid) =>
+          bid.caseTitle.toLowerCase().includes(lowerCaseSearchTerm) ||
+          bid.caseDescription.toLowerCase().includes(lowerCaseSearchTerm) ||
+          bid.clientName.toLowerCase().includes(lowerCaseSearchTerm)
+      );
+    }
+
+    // Apply status filter
+    if (statusFilter !== "all") {
+      result = result.filter(
+        (bid) => bid.status.toLowerCase() === statusFilter.toLowerCase()
+      );
+    }
+
+    // Apply sort order
+    if (sortOrder === "newest") {
+      result.sort(
+        (a, b) => new Date(b.submittedDate) - new Date(a.submittedDate)
+      );
+    } else if (sortOrder === "oldest") {
+      result.sort(
+        (a, b) => new Date(a.submittedDate) - new Date(b.submittedDate)
+      );
+    } else if (sortOrder === "highest") {
+      result.sort((a, b) => b.amount - a.amount);
+    } else if (sortOrder === "lowest") {
+      result.sort((a, b) => a.amount - b.amount);
+    }
+
+    setFilteredBids(result);
+  }, [bids, searchTerm, statusFilter, sortOrder]);
+
+  // Format date with better error handling
+  const formatDate = (dateString) => {
+    if (!dateString || dateString === "Not specified") return "Not specified";
+    
+    try {
+      const date = new Date(dateString);
+      // Check if date is valid
+      if (isNaN(date.getTime())) {
+        return "Invalid date";
+      }
+      
+      return new Intl.DateTimeFormat("en-US", {
+        year: "numeric",
+        month: "long",
+        day: "numeric",
+      }).format(date);
+    } catch (err) {
+      console.error("Error formatting date:", err);
+      return "Invalid date";
     }
   };
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-64">
+      <div className="flex justify-center items-center h-64">
         <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary"></div>
       </div>
     );
   }
 
   if (error) {
-    return <div className="text-red-600 text-center mt-4">{error}</div>;
+    return (
+      <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6">
+        <div className="flex">
+          <AlertTriangle className="h-5 w-5 text-red-500 mr-2 flex-shrink-0" />
+          <div>
+            <h3 className="text-sm font-medium text-red-800">Error</h3>
+            <p className="text-sm text-red-700 mt-1">{error}</p>
+            {error.includes("log in") && (
+              <Link
+                to="/login"
+                className="mt-2 inline-flex items-center text-sm font-medium text-red-700 hover:text-red-800"
+              >
+                Go to login page
+              </Link>
+            )}
+          </div>
+        </div>
+      </div>
+    );
   }
 
   return (
     <div className="font-inter bg-background text-foreground min-h-screen">
       {/* Header */}
-      <div className="bg-gradient-to-r from-primary to-primary/80 text-primary-foreground py-8">
+      <div className="bg-gradient-to-r from-primary to-primary/80 text-primary-foreground py-6">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <h1 className="text-2xl md:text-3xl font-bold tracking-tight drop-shadow-md">
-            My Bids
-          </h1>
+          <h1 className="text-2xl md:text-3xl font-bold">My Bids</h1>
+          <p className="text-primary-foreground/80 mt-1">
+            Track and manage all your bids on legal cases
+          </p>
         </div>
       </div>
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Filter Section */}
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-6">
-          <div className="mb-4 md:mb-0">
-            <h2 className="text-xl font-semibold text-foreground tracking-tight">
-              {filteredBids.length}{" "}
-              {selectedStatus === "all" ? "Total" : selectedStatus} Bids
-            </h2>
-          </div>
-
-          <div className="relative w-full md:w-64">
-            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-              <Filter className="h-5 w-5 text-gray-400" />
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        {/* Filters and Search */}
+        <div className="bg-card text-card-foreground rounded-lg shadow-md p-4 mb-6">
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+            <div className="relative flex-1">
+              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <Search className="h-4 w-4 text-gray-400" />
+              </div>
+              <input
+                type="text"
+                placeholder="Search by case title, description, or client name"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="pl-10 block w-full rounded-lg border border-gray-300 py-2 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary transition-all duration-300"
+              />
             </div>
-            <select
-              value={selectedStatus}
-              onChange={(e) => setSelectedStatus(e.target.value)}
-              className="block w-full pl-10 pr-3 py-2 border border-gray-200 rounded-lg leading-5 bg-white focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary sm:text-sm transition-all duration-300 hover:shadow-md"
-            >
-              <option value="all">All Bids</option>
-              <option value="pending">Pending</option>
-              <option value="accepted">Accepted</option>
-              <option value="rejected">Rejected</option>
-            </select>
+
+            <div className="flex flex-col sm:flex-row gap-3">
+              <div className="relative">
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                  <Filter className="h-4 w-4 text-gray-400" />
+                </div>
+                <select
+                  value={statusFilter}
+                  onChange={(e) => setStatusFilter(e.target.value)}
+                  className="pl-10 block w-full rounded-lg border border-gray-300 py-2 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary transition-all duration-300"
+                >
+                  <option value="all">All Statuses</option>
+                  <option value="pending">Pending</option>
+                  <option value="accepted">Accepted</option>
+                  <option value="rejected">Rejected</option>
+                </select>
+              </div>
+
+              <div className="relative">
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                  <Clock className="h-4 w-4 text-gray-400" />
+                </div>
+                <select
+                  value={sortOrder}
+                  onChange={(e) => setSortOrder(e.target.value)}
+                  className="pl-10 block w-full rounded-lg border border-gray-300 py-2 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary transition-all duration-300"
+                >
+                  <option value="newest">Newest First</option>
+                  <option value="oldest">Oldest First</option>
+                  <option value="highest">Highest Amount</option>
+                  <option value="lowest">Lowest Amount</option>
+                </select>
+              </div>
+            </div>
           </div>
         </div>
 
         {/* Bids List */}
         {filteredBids.length > 0 ? (
-          <div className="bg-card text-card-foreground shadow-lg rounded-xl overflow-hidden transition-all duration-300">
-            <ul className="divide-y divide-gray-200">
-              {filteredBids.map((bid) => (
-                <li
-                  key={bid.id}
-                  className={`transition-all duration-300 ${getCardStatusColor(
-                    bid.status
-                  )}`}
-                >
-                  <Link to="#" className="block">
-                    <div className="px-6 py-5 group">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center">
-                          <div className="flex-shrink-0">
-                            <div className="h-12 w-12 rounded-full bg-purple-100 flex items-center justify-center group-hover:bg-blue-200 group-hover:scale-105 transition-all duration-300">
-                              <DollarSign className="h-6 w-6 text-primary group-hover:text-blue-600 transition-colors duration-300" />
-                            </div>
-                          </div>
-                          <div className="ml-4">
-                            <div className="flex items-center">
-                              <h3 className="text-lg font-italic text-foreground group-hover:text-primary transition-colors duration-300">
-                                {bid.caseTitle}
-                              </h3>
-                              <span
-                                className={`ml-2 px-3 py-1 rounded-full text-xs font-medium border ${getStatusColor(
-                                  bid.status
-                                )} transition-all duration-300 transform group-hover:scale-105`}
-                              >
-                                {bid.status.charAt(0).toUpperCase() +
-                                  bid.status.slice(1)}
-                              </span>
-                            </div>
-                            <div className="mt-2 text-sm text-gray-600 flex items-center">
-                              <FileText className="mr-1 h-4 w-4 text-gray-500 group-hover:text-primary transition-colors duration-300" />
-                              Client:{" "}
-                              <span className="ml-1 group-hover:text-primary transition-colors duration-300">
-                                {bid.clientName}
-                              </span>
-                            </div>
-                            <div className="mt-1 flex items-center text-sm text-gray-600">
-                              <DollarSign className="mr-1 h-4 w-4 text-gray-500 group-hover:text-primary transition-colors duration-300" />
-                              Bid Amount:{" "}
-                              <span className="ml-1 font-medium group-hover:text-primary transition-colors duration-300">
-                                {formatCurrency(bid.amount)}
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-                        <div className="flex flex-col items-end">
-                          <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800 mb-2 border border-blue-200 shadow-sm hover:bg-blue-200 hover:scale-105 transition-all duration-300">
-                            {bid.category}
-                          </span>
-                          <div className="flex items-center text-sm text-gray-600">
-                            <Clock className="mr-1 h-4 w-4 text-gray-500 group-hover:text-primary transition-colors duration-300" />
-                            Submitted:{" "}
-                            <span className="ml-1 group-hover:text-primary transition-colors duration-300">
-                              {formatDate(bid.submittedDate)}
-                            </span>
-                          </div>
-                          <div className="flex items-center text-sm text-gray-600 mt-1">
-                            <Calendar className="mr-1 h-4 w-4 text-gray-500 group-hover:text-primary transition-colors duration-300" />
-                            Expires:{" "}
-                            <span className="ml-1 group-hover:text-primary transition-colors duration-300">
-                              {formatDate(bid.expiryDate)}
-                            </span>
-                          </div>
-                          <ChevronRight className="h-5 w-5 text-gray-400 mt-2 group-hover:text-primary group-hover:scale-110 transition-all duration-300" />
-                        </div>
-                      </div>
-                      <div className="mt-2 ml-16">
-                        <p className="text-sm text-gray-600 line-clamp-2 group-hover:text-gray-800 transition-colors duration-300">
-                          {bid.notes}
-                        </p>
-                      </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {filteredBids.map((bid) => (
+              <div
+                key={bid.id}
+                className="bg-card text-card-foreground rounded-lg shadow-md overflow-hidden hover:shadow-lg transition-all duration-300 hover:bg-gradient-to-r hover:from-primary/5 hover:to-primary/10 hover:scale-[1.02] hover:border hover:border-primary/30"
+              >
+                <div className="p-4">
+                  <div className="flex justify-between items-start mb-3">
+                    <h2 className="text-lg font-semibold text-foreground truncate">
+                      {bid.caseTitle}
+                    </h2>
+                    <span
+                      className={`px-2.5 py-0.5 rounded-full text-xs font-medium border ${getStatusBadgeColor(
+                        bid.status
+                      )}`}
+                    >
+                      {bid.status}
+                    </span>
+                  </div>
+                  <p className="text-muted-foreground text-sm mb-3 line-clamp-2">
+                    {bid.caseDescription}
+                  </p>
+                  <div className="flex items-center text-muted-foreground text-sm mb-3">
+                    <DollarSign className="h-4 w-4 mr-1 text-primary" />
+                    <span className="font-medium text-foreground">
+                      {bid.amount} ETB
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 text-xs text-muted-foreground mb-4">
+                    <div className="flex items-center">
+                      <Calendar className="h-3 w-3 mr-1" />
+                      <span>Bid: {formatDate(bid.submittedDate)}</span>
                     </div>
-                  </Link>
-                </li>
-              ))}
-            </ul>
+                    <div className="flex items-center">
+                      <Clock className="h-3 w-3 mr-1" />
+                      <span>Deadline: {formatDate(bid.deadline)}</span>
+                    </div>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <div className="text-xs text-muted-foreground">
+                      Client: {bid.clientName}
+                    </div>
+                    <button
+                      onClick={() => openBidDetails(bid)}
+                      className="inline-flex items-center px-3 py-1.5 bg-primary text-primary-foreground text-xs font-medium rounded-lg hover:bg-primary/90 transition-colors"
+                    >
+                      <Info className="h-3 w-3 mr-1" /> Bid Details
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ))}
           </div>
         ) : (
-          <div className="bg-card text-card-foreground rounded-xl shadow-lg p-8 text-center transition-all duration-300 hover:shadow-xl hover:bg-gradient-to-r hover:from-primary/5 hover:to-primary/10">
-            <DollarSign className="mx-auto h-12 w-12 text-gray-400 mb-4 animate-pulse" />
-            <h3 className="text-lg font-semibold text-foreground mb-2">
-              No bids found
+          <div className="bg-card text-card-foreground rounded-lg shadow-md p-8 text-center">
+            <div className="flex justify-center mb-4">
+              {searchTerm || statusFilter !== "all" ? (
+                <AlertCircle className="h-12 w-12 text-muted-foreground" />
+              ) : (
+                <DollarSign className="h-12 w-12 text-muted-foreground" />
+              )}
+            </div>
+            <h3 className="text-lg font-medium text-foreground mb-2">
+              {searchTerm || statusFilter !== "all"
+                ? "No matching bids found"
+                : "No bids yet"}
             </h3>
-            <p className="text-gray-600 mb-4">
-              {selectedStatus === "all"
-                ? "You haven't submitted any bids yet."
-                : `You don't have any ${selectedStatus} bids.`}
+            <p className="text-muted-foreground mb-6">
+              {searchTerm || statusFilter !== "all"
+                ? "Try adjusting your search filters to find what you're looking for."
+                : "You haven't placed any bids on cases yet."}
             </p>
-            {selectedStatus !== "all" ? (
-              <button
-                onClick={() => setSelectedStatus("all")}
-                className="inline-flex items-center px-4 py-2 border border-gray-200 rounded-lg text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 hover:shadow-md transform hover:scale-105 transition-all duration-300 mr-3"
+            {!searchTerm && statusFilter === "all" ? (
+              <Link
+                to="/lawyer/cases/available"
+                className="inline-flex items-center px-4 py-2 border border-transparent rounded-lg text-sm font-medium text-primary-foreground bg-primary hover:bg-primary/90 hover:shadow-lg transition-all duration-300"
               >
-                View All Bids
-              </button>
+                Browse Available Cases
+              </Link>
             ) : null}
-            <Link
-              to="/lawyer/cases/available"
-              className="inline-flex items-center px-4 py-2 border border-transparent rounded-lg text-sm font-medium text-primary-foreground bg-primary hover:bg-primary/90 hover:shadow-lg transform hover:scale-105 transition-all duration-300"
-            >
-              Browse Available Cases
-            </Link>
           </div>
         )}
+      </div>
 
-        {/* Bid Status Guide */}
-        <div className="mt-8 bg-card text-card-foreground rounded-xl shadow-lg p-6 transition-all duration-300 hover:shadow-xl hover:bg-gradient-to-r hover:from-primary/5 hover:to-primary/10">
-          <h3 className="text-lg font-semibold text-foreground mb-4 tracking-tight">
-            Bid Status Guide
-          </h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            <div className="flex items-center p-3 rounded-lg hover:bg-gray-50 transition-all duration-300 group">
-              <Clock className="h-5 w-5 text-yellow-500 mr-2 group-hover:scale-110 transition-transform duration-300" />
-              <div>
-                <p className="font-medium text-foreground group-hover:text-primary transition-colors duration-300">
-                  Pending
-                </p>
-                <p className="text-sm text-gray-600 group-hover:text-gray-800 transition-colors duration-300">
-                  Client is reviewing your bid
-                </p>
-              </div>
+      {/* Bid Details Popup */}
+      {showPopup && selectedBid && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-xl w-full max-w-md transform transition-all">
+            {/* Header */}
+            <div className="flex items-center justify-between p-4 border-b">
+              <h3 className="text-lg font-semibold text-gray-900 flex items-center">
+                {getStatusIcon(selectedBid.status)}
+                <span className="ml-2">Bid Details</span>
+              </h3>
+              <button
+                onClick={closePopup}
+                className="text-gray-400 hover:text-gray-500 focus:outline-none"
+              >
+                <X className="h-5 w-5" />
+              </button>
             </div>
-            <div className="flex items-center p-3 rounded-lg hover:bg-gray-50 transition-all duration-300 group">
-              <CheckCircle className="h-5 w-5 text-green-500 mr-2 group-hover:scale-110 transition-transform duration-300" />
-              <div>
-                <p className="font-medium text-foreground group-hover:text-primary transition-colors duration-300">
-                  Accepted
-                </p>
-                <p className="text-sm text-gray-600 group-hover:text-gray-800 transition-colors duration-300">
-                  Client has accepted your bid
-                </p>
+            
+            {/* Content */}
+            <div className="p-6">
+              <div className="mb-6">
+                <div className="flex justify-between items-center mb-2">
+                  <h4 className="text-base font-medium text-gray-900">Case Information</h4>
+                  <span
+                    className={`px-2.5 py-0.5 rounded-full text-xs font-medium border ${getStatusBadgeColor(
+                      selectedBid.status
+                    )}`}
+                  >
+                    {selectedBid.status}
+                  </span>
+                </div>
+                <p className="text-sm font-medium text-gray-900">{selectedBid.caseTitle}</p>
+                <p className="text-sm text-gray-500 mt-1">{selectedBid.caseDescription}</p>
               </div>
+              
+              <div className="grid grid-cols-2 gap-4 mb-6">
+                <div>
+                  <p className="text-xs text-gray-500">Bid Amount</p>
+                  <p className="text-sm font-medium text-gray-900 flex items-center">
+                    <DollarSign className="h-4 w-4 text-primary mr-1" />
+                    {selectedBid.amount} ETB
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs text-gray-500">Bid Date</p>
+                  <p className="text-sm font-medium text-gray-900">
+                    {formatDate(selectedBid.submittedDate)}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs text-gray-500">Client</p>
+                  <p className="text-sm font-medium text-gray-900">
+                    {selectedBid.clientName}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs text-gray-500">Case Deadline</p>
+                  <p className="text-sm font-medium text-gray-900">
+                    {formatDate(selectedBid.deadline)}
+                  </p>
+                </div>
+              </div>
+              
+              {selectedBid.comment && (
+                <div className="mb-6">
+                  <p className="text-xs text-gray-500 mb-1">Your Comment</p>
+                  <p className="text-sm text-gray-700 bg-gray-50 p-3 rounded-lg">
+                    {selectedBid.comment}
+                  </p>
+                </div>
+              )}
+              
+              {selectedBid.status === "Accepted" && (
+                <div className="bg-green-50 border border-green-100 rounded-lg p-4 flex items-start">
+                  <Award className="h-5 w-5 text-green-500 mr-3 flex-shrink-0" />
+                  <div>
+                    <p className="text-sm font-medium text-green-800">
+                      Congratulations! Your bid was accepted.
+                    </p>
+                    <p className="text-xs text-green-700 mt-1">
+                      You have been assigned to this case. You can now proceed with handling the case.
+                    </p>
+                  </div>
+                </div>
+              )}
+              
+              {selectedBid.status === "Rejected" && (
+                <div className="bg-red-50 border border-red-100 rounded-lg p-4 flex items-start">
+                  <XCircle className="h-5 w-5 text-red-500 mr-3 flex-shrink-0" />
+                  <div>
+                    <p className="text-sm font-medium text-red-800">
+                      Your bid was not selected.
+                    </p>
+                    <p className="text-xs text-red-700 mt-1">
+                      The client has chosen another lawyer for this case.
+                    </p>
+                  </div>
+                </div>
+              )}
+              
+              {selectedBid.status === "Pending" && (
+                <div className="bg-amber-50 border border-amber-100 rounded-lg p-4 flex items-start">
+                  <Clock className="h-5 w-5 text-amber-500 mr-3 flex-shrink-0" />
+                  <div>
+                    <p className="text-sm font-medium text-amber-800">
+                      Your bid is awaiting client decision.
+                    </p>
+                    <p className="text-xs text-amber-700 mt-1">
+                      The client has not yet made a decision on this case.
+                    </p>
+                  </div>
+                </div>
+              )}
             </div>
-            <div className="flex items-center p-3 rounded-lg hover:bg-gray-50 transition-all duration-300 group">
-              <XCircle className="h-5 w-5 text-red-500 mr-2 group-hover:scale-110 transition-transform duration-300" />
-              <div>
-                <p className="font-medium text-foreground group-hover:text-primary transition-colors duration-300">
-                  Rejected
-                </p>
-                <p className="text-sm text-gray-600 group-hover:text-gray-800 transition-colors duration-300">
-                  Client has rejected your bid
-                </p>
-              </div>
+            
+            {/* Footer */}
+            <div className="bg-gray-50 px-4 py-3 sm:px-6 flex justify-between rounded-b-lg">
+              <button
+                onClick={closePopup}
+                className="inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none"
+              >
+                Close
+              </button>
+              <Link
+                to={`/lawyer/cases/${selectedBid.caseId}`}
+                className="inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-primary text-sm font-medium text-white hover:bg-primary/90 focus:outline-none"
+              >
+                View Case
+              </Link>
             </div>
           </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }

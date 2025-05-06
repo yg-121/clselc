@@ -1,17 +1,61 @@
-import { useState, useEffect } from "react";
-import { Link, useParams } from "react-router-dom";
+import React, { useState, useEffect } from "react";
+import { useParams, Link } from "react-router-dom";
+import { useAuth } from "../../hooks/authHooks";
 import {
-  Briefcase,
+  User,
+  Mail,
+  Phone,
   MapPin,
-  Star,
-  MessageSquare,
-  Globe,
+  Briefcase,
   DollarSign,
-  CheckCircle,
+  Globe,
+  Award,
+  FileText,
+  Edit3,
+  Save,
+  X,
   XCircle,
+  CheckCircle,
 } from "lucide-react";
 
+// Add custom styles
+const customStyles = {
+  multiSelect: {
+    option: {
+      padding: '8px 12px',
+      borderBottom: '1px solid #f0f0f0',
+      cursor: 'pointer',
+      transition: 'background-color 0.2s ease',
+    },
+    optionSelected: {
+      backgroundColor: 'rgba(79, 70, 229, 0.1)',
+      color: '#4F46E5',
+      fontWeight: '500',
+    },
+    optionHover: {
+      backgroundColor: 'rgba(79, 70, 229, 0.05)',
+    },
+    tag: {
+      display: 'inline-flex',
+      alignItems: 'center',
+      backgroundColor: 'rgba(79, 70, 229, 0.1)',
+      color: '#4F46E5',
+      fontSize: '0.75rem',
+      borderRadius: '9999px',
+      padding: '0.25rem 0.5rem',
+      margin: '0.25rem',
+    },
+    tagRemove: {
+      marginLeft: '0.25rem',
+      cursor: 'pointer',
+      color: '#4F46E5',
+      transition: 'opacity 0.2s ease',
+    }
+  }
+};
+
 export default function LawyerProfile() {
+  const { user: authUser } = useAuth();
   const [lawyerData, setLawyerData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -30,63 +74,94 @@ export default function LawyerProfile() {
     isAvailable: false,
     profilePhoto: null,
   });
+  const [selectedSpecializations, setSelectedSpecializations] = useState([]);
+  const validSpecializations = [
+    'Criminal Law', 'Family Law', 'Corporate Law', 'Immigration', 'Personal Injury',
+    'Real Estate', 'Civil law', 'Marriage law', 'Intellectual Property', 'Employment Law',
+    'Bankruptcy', 'Tax Law'
+  ];
   const [successMessage, setSuccessMessage] = useState("");
+  const [previewImage, setPreviewImage] = useState(null);
+  const [activeTab, setActiveTab] = useState("about");
+  const [passwordForm, setPasswordForm] = useState({
+    currentPassword: "",
+    newPassword: "",
+    confirmPassword: ""
+  });
+  const [passwordError, setPasswordError] = useState("");
+  const [passwordSuccess, setPasswordSuccess] = useState("");
+  const [passwordLoading, setPasswordLoading] = useState(false);
+
+  // Add the handleSpecializationChange function
+  const handleSpecializationChange = (e) => {
+    const options = e.target.options;
+    const selected = [];
+    for (let i = 0; i < options.length; i++) {
+      if (options[i].selected) {
+        selected.push(options[i].value);
+      }
+    }
+    setSelectedSpecializations(selected);
+  };
+  
+  // Add a function to toggle individual specializations
+  const toggleSpecialization = (spec) => {
+    if (selectedSpecializations.includes(spec)) {
+      setSelectedSpecializations(selectedSpecializations.filter(s => s !== spec));
+    } else {
+      setSelectedSpecializations([...selectedSpecializations, spec]);
+    }
+  };
 
   useEffect(() => {
     const fetchLawyerProfile = async () => {
-      if (!lawyerId) {
-        setError("Invalid lawyer ID. Please check the URL.");
-        setLoading(false);
-        return;
-      }
-
       try {
         setLoading(true);
-        setError(null);
-
-        const response = await fetch(
-          `http://localhost:5000/api/users/lawyers/${lawyerId}`,
-          {
-            method: "GET",
-          }
-        );
-
+        const token = localStorage.getItem("token");
+        if (!token) throw new Error("Authentication required");
+        
+        const response = await fetch(`http://localhost:5000/api/users/lawyers/${lawyerId || 'me'}`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        
         if (!response.ok) {
-          const errorData = await response
-            .json()
-            .catch(() => ({ message: "Server Error" }));
-          if (response.status === 404) {
-            throw new Error(errorData.message || "Lawyer not found");
-          }
-          throw new Error(
-            errorData.message ||
-              `Failed to fetch lawyer profile (Status: ${response.status})`
-          );
+          throw new Error("Failed to fetch lawyer profile");
         }
-
+        
         const data = await response.json();
-        setLawyerData(data.lawyer);
+        // Merge the lawyer data with the email from auth context
+        const mergedData = {
+          ...data.lawyer,
+          email: authUser?.email || data.lawyer.email
+        };
+        
+        setLawyerData(mergedData);
+        
+        // Set selected specializations
+        if (Array.isArray(mergedData.specialization)) {
+          setSelectedSpecializations(mergedData.specialization);
+        }
+        
         setFormData({
-          username: data.lawyer.username || "",
-          email: data.lawyer.email || "",
-          specialization: Array.isArray(data.lawyer.specialization)
-            ? data.lawyer.specialization.join(", ")
-            : data.lawyer.specialization || "",
-          location: data.lawyer.location || "",
-          yearsOfExperience: data.lawyer.yearsOfExperience || "",
-          bio: data.lawyer.bio || "",
-          certifications: Array.isArray(data.lawyer.certifications)
-            ? data.lawyer.certifications.join(", ")
-            : data.lawyer.certifications || "",
-          hourlyRate: data.lawyer.hourlyRate || "",
-          languages: Array.isArray(data.lawyer.languages)
-            ? data.lawyer.languages.join(", ")
-            : data.lawyer.languages || "",
-          isAvailable: data.lawyer.isAvailable || false,
+          username: mergedData.username || "",
+          email: mergedData.email || "",
+          specialization: Array.isArray(mergedData.specialization)
+            ? mergedData.specialization.join(", ")
+            : mergedData.specialization || "",
+          location: mergedData.location || "",
+          yearsOfExperience: mergedData.yearsOfExperience || "",
+          bio: mergedData.bio || "",
+          certifications: Array.isArray(mergedData.certifications)
+            ? mergedData.certifications.join(", ")
+            : mergedData.certifications || "",
+          hourlyRate: mergedData.hourlyRate || "",
+          languages: Array.isArray(mergedData.languages)
+            ? mergedData.languages.join(", ")
+            : mergedData.languages || "",
+          isAvailable: mergedData.isAvailable || false,
           profilePhoto: null,
         });
       } catch (err) {
-        console.error("Error fetching lawyer profile:", err);
         setError(err.message);
       } finally {
         setLoading(false);
@@ -94,131 +169,206 @@ export default function LawyerProfile() {
     };
 
     fetchLawyerProfile();
-  }, [lawyerId]);
+  }, [lawyerId, authUser]);
 
   const handleInputChange = (e) => {
-    const { name, value, type, checked, files } = e.target;
-    if (type === "checkbox") {
-      setFormData((prev) => ({ ...prev, [name]: checked }));
-    } else if (type === "file") {
-      setFormData((prev) => ({ ...prev, [name]: files[0] }));
-    } else {
-      setFormData((prev) => ({ ...prev, [name]: value }));
+    const { name, value, type, checked } = e.target;
+    setFormData((prev) => ({
+      ...prev,
+      [name]: type === "checkbox" ? checked : value,
+    }));
+  };
+
+  const handleFileChange = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      setFormData((prev) => ({ ...prev, profilePhoto: file }));
+      const reader = new FileReader();
+      reader.onloadend = () => setPreviewImage(reader.result);
+      reader.readAsDataURL(file);
     }
   };
 
   const handleUpdateProfile = async (e) => {
     e.preventDefault();
-    const token = localStorage.getItem("token");
-    if (!token) {
-      setError("Authentication token not found. Please log in.");
-      return;
-    }
-
-    const data = new FormData();
-
-    // Helper to compare arrays after trimming
-    const arraysEqual = (arr1, arr2) => {
-      if (arr1.length !== arr2.length) return false;
-      const sorted1 = [...arr1].sort();
-      const sorted2 = [...arr2].sort();
-      return sorted1.every((val, idx) => val === sorted2[idx]);
-    };
-
-    // Process each field and only append if changed
-    Object.keys(formData).forEach((key) => {
-      if (
-        key === "specialization" ||
-        key === "certifications" ||
-        key === "languages"
-      ) {
-        const formValues = formData[key]
-          .split(",")
-          .map((item) => item.trim())
-          .filter((item) => item.length > 0);
-        const originalValues = Array.isArray(lawyerData[key])
-          ? lawyerData[key]
-          : (lawyerData[key] || "")
-              .split(",")
-              .map((item) => item.trim())
-              .filter(Boolean);
-
-        if (formValues.length > 0 && !arraysEqual(formValues, originalValues)) {
-          data.append(key, formValues);
-        }
-      } else if (key === "profilePhoto" && formData.profilePhoto) {
-        data.append(key, formData.profilePhoto);
-      } else if (key === "email") {
-        if (formData.email && formData.email !== (lawyerData.email || "")) {
-          data.append(key, formData.email);
-        }
-      } else if (
-        formData[key] !== null &&
-        formData[key] !== "" &&
-        key !== "status" &&
-        formData[key].toString() !== (lawyerData[key] || "").toString()
-      ) {
-        data.append(key, formData[key]);
-      }
-
-      console.log("Adonany", key, formData[key]);
-    });
-
-    // Check if there are any fields to update
-    const hasUpdates = Array.from(data.entries()).length > 0;
-    if (!hasUpdates) {
-      setSuccessMessage("No changes to update");
-      setEditMode(false);
-      setTimeout(() => setSuccessMessage(""), 3000);
-      return;
-    }
+    setError(null);
+    setSuccessMessage("");
 
     try {
-      const response = await fetch(
-        `http://localhost:5000/api/users/lawyer/profile`,
-        {
-          method: "PUT",
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-          body: data,
+      const token = localStorage.getItem("token");
+      if (!token) throw new Error("Authentication required");
+
+      const data = new FormData();
+      
+      // Add selected specializations
+      if (selectedSpecializations.length > 0) {
+        selectedSpecializations.forEach(spec => {
+          data.append("specialization", spec);
+        });
+      }
+      
+      // Add other form fields
+      Object.keys(formData).forEach((key) => {
+        if (key === "profilePhoto" && formData.profilePhoto) {
+          data.append(key, formData.profilePhoto);
+        } else if (key === "email") {
+          if (formData.email && formData.email !== (lawyerData.email || "")) {
+            data.append(key, formData.email);
+          }
+        } else if (
+          key !== "specialization" && // Skip specialization as we handled it separately
+          formData[key] !== null &&
+          formData[key] !== "" &&
+          formData[key].toString() !== (lawyerData[key] || "").toString()
+        ) {
+          data.append(key, formData[key]);
         }
-      );
+      });
+
+      // Check if there are any fields to update
+      const hasUpdates = Array.from(data.entries()).length > 0;
+      if (!hasUpdates) {
+        setSuccessMessage("No changes to update");
+        setEditMode(false);
+        setTimeout(() => setSuccessMessage(""), 3000);
+        return;
+      }
+
+      const response = await fetch("http://localhost:5000/api/users/lawyer/profile", {
+        method: "PUT",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+        body: data,
+      });
 
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(
-          errorData.message || `Update failed (Status: ${response.status})`
-        );
+        throw new Error(errorData.message || "Failed to update profile");
       }
 
-      const result = await response.json();
-      setLawyerData(result.user);
-      setSuccessMessage("Lawyer profile updated successfully");
+      const responseData = await response.json();
+      setLawyerData(responseData.lawyer);
+      setSuccessMessage("Profile updated successfully");
       setEditMode(false);
       setTimeout(() => setSuccessMessage(""), 3000);
     } catch (err) {
-      console.error("Error updating profile:", err);
       setError(err.message);
+    }
+  };
+
+  const toggleEditMode = () => {
+    if (editMode) {
+      // Cancel edit mode
+      setEditMode(false);
+      setPreviewImage(null);
+      // Reset form data to current lawyer data
+      setFormData({
+        username: lawyerData.username || "",
+        email: lawyerData.email || "",
+        specialization: Array.isArray(lawyerData.specialization)
+          ? lawyerData.specialization.join(", ")
+          : lawyerData.specialization || "",
+        location: lawyerData.location || "",
+        yearsOfExperience: lawyerData.yearsOfExperience || "",
+        bio: lawyerData.bio || "",
+        certifications: Array.isArray(lawyerData.certifications)
+          ? lawyerData.certifications.join(", ")
+          : lawyerData.certifications || "",
+        hourlyRate: lawyerData.hourlyRate || "",
+        languages: Array.isArray(lawyerData.languages)
+          ? lawyerData.languages.join(", ")
+          : lawyerData.languages || "",
+        isAvailable: lawyerData.isAvailable || false,
+        profilePhoto: null,
+      });
+    } else {
+      // Enter edit mode
+      setEditMode(true);
+    }
+  };
+
+  const handlePasswordChange = (e) => {
+    const { name, value } = e.target;
+    setPasswordForm(prev => ({
+      ...prev,
+      [name]: value
+    }));
+  };
+
+  const handleChangePassword = async (e) => {
+    e.preventDefault();
+    setPasswordError("");
+    setPasswordSuccess("");
+    
+    // Validate passwords
+    if (!passwordForm.currentPassword || !passwordForm.newPassword || !passwordForm.confirmPassword) {
+      setPasswordError("All fields are required");
+      return;
+    }
+    
+    if (passwordForm.newPassword !== passwordForm.confirmPassword) {
+      setPasswordError("New passwords do not match");
+      return;
+    }
+    
+    if (passwordForm.newPassword.length < 8) {
+      setPasswordError("New password must be at least 8 characters");
+      return;
+    }
+    
+    try {
+      setPasswordLoading(true);
+      const token = localStorage.getItem("token");
+      if (!token) throw new Error("Authentication required");
+      
+      const response = await fetch("http://localhost:5000/api/users/lawyer/password", {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          currentPassword: passwordForm.currentPassword,
+          newPassword: passwordForm.newPassword
+        })
+      });
+      
+      const data = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(data.message || "Failed to change password");
+      }
+      
+      setPasswordSuccess("Password changed successfully");
+      setPasswordForm({
+        currentPassword: "",
+        newPassword: "",
+        confirmPassword: ""
+      });
+      
+      setTimeout(() => setPasswordSuccess(""), 3000);
+    } catch (err) {
+      setPasswordError(err.message);
+    } finally {
+      setPasswordLoading(false);
     }
   };
 
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary"></div>
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="text-center mt-16 text-red-600">
-        <p className="text-xl font-semibold">{error}</p>
-        <Link
-          to="/lawyers"
-          className="mt-4 inline-block text-blue-500 hover:underline"
-        >
+      <div className="text-center p-6 bg-red-50 rounded-lg">
+        <XCircle className="h-12 w-12 text-red-500 mx-auto mb-4" />
+        <p className="text-lg font-medium text-red-700">{error}</p>
+        <Link to="/lawyers" className="mt-4 inline-block text-primary hover:underline">
           Back to Lawyers List
         </Link>
       </div>
@@ -226,261 +376,505 @@ export default function LawyerProfile() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 font-sans">
-      {/* Header Section */}
-      <div className="bg-gradient-to-r from-primary to-primary/80 text-primary-foreground py-16">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-          <img
-            src={lawyerData.profile_photo || "https://via.placeholder.com/150"}
-            alt={lawyerData.username}
-            className="h-32 w-32 mx-auto rounded-full border-4 border-white shadow-lg mb-4"
-          />
-          <h1 className="text-4xl font-extrabold mb-2">
-            {lawyerData.username}
-          </h1>
-          <p className="text-lg text-gray-200 mb-4">
-            Specialization : {lawyerData.specialization.join(", ")}
-          </p>
-          <div className="flex items-center justify-center space-x-2 mb-2">
-            <Star className="h-6 w-6 text-yellow-300" />
-            <span className="text-xl font-semibold">
-              {lawyerData.averageRating.toFixed(1)}/5
-            </span>
-            <span className="text-gray-300">
-              ({lawyerData.ratingCount} reviews)
-            </span>
+    <div className="max-w-6xl mx-auto px-4 py-6">
+      {/* Success message */}
+      {successMessage && (
+        <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-lg flex items-center">
+          <CheckCircle className="h-5 w-5 text-green-500 mr-2" />
+          <p className="text-green-700">{successMessage}</p>
+        </div>
+      )}
+
+      {/* Edit/Save buttons */}
+      <div className="flex justify-end mb-4">
+        {editMode ? (
+          <div className="flex space-x-2">
+            <button
+              onClick={handleUpdateProfile}
+              className="inline-flex items-center px-4 py-2 bg-primary text-white rounded-lg shadow hover:bg-primary/90 transition-colors"
+            >
+              <Save className="h-4 w-4 mr-2" />
+              Save Changes
+            </button>
+            <button
+              onClick={toggleEditMode}
+              className="inline-flex items-center px-4 py-2 bg-gray-200 text-gray-700 rounded-lg shadow hover:bg-gray-300 transition-colors"
+            >
+              <X className="h-4 w-4 mr-2" />
+              Cancel
+            </button>
           </div>
-          <div className="flex items-center justify-center space-x-2">
-            {lawyerData.isAvailable ? (
-              <CheckCircle className="h-6 w-6 text-green-400" />
-            ) : (
-              <XCircle className="h-6 w-6 text-red-400" />
-            )}
-            <span className="text-lg font-medium">
-              {lawyerData.isAvailable ? "I am Available" : "Not Available"}
-            </span>
-          </div>
+        ) : (
           <button
-            onClick={() => setEditMode(true)}
-            className="mt-6 inline-flex items-center px-6 py-3 bg-white text-primary rounded-lg font-semibold hover:bg-gray-100 transition-colors"
+            onClick={toggleEditMode}
+            className="inline-flex items-center px-4 py-2 bg-gray-100 text-gray-700 rounded-lg shadow hover:bg-gray-200 transition-colors"
           >
+            <Edit3 className="h-4 w-4 mr-2" />
             Edit Profile
           </button>
-          {successMessage && (
-            <p className="mt-4 text-green-600 font-medium">{successMessage}</p>
-          )}
-        </div>
+        )}
       </div>
 
-      {/* Main Content */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          {/* Left Column - Profile Summary */}
-          <div className="lg:col-span-1">
-            <div className="bg-white rounded-lg shadow-lg p-6">
-              <h2 className="text-2xl font-semibold text-gray-800 mb-4">
-                About Me
-              </h2>
-              {!editMode ? (
-                <>
-                  <p className="text-gray-600 mb-4">Bio : {lawyerData.bio}</p>
-                  <div className="space-y-4">
-                    <div className="flex items-center text-gray-600">
-                      <Briefcase className="h-5 w-5 text-gray-400 mr-2" />
-                      <span className="font-medium">
-                        Experience: {lawyerData.yearsOfExperience} years
-                      </span>
-                    </div>
-                    <div className="flex items-center text-gray-600">
-                      <MapPin className="h-5 w-5 text-gray-400 mr-2" />
-                      <span className="font-medium">
-                        Location: {lawyerData.location}
-                      </span>
-                    </div>
-                    <div className="flex items-center text-gray-600">
-                      <DollarSign className="h-5 w-5 text-gray-400 mr-2" />
-                      <span className="font-medium">
-                        Hourly Rate: ${lawyerData.hourlyRate}
-                      </span>
-                    </div>
-                    <div className="flex items-center text-gray-600">
-                      <Globe className="h-5 w-5 text-gray-400 mr-2" />
-                      <span className="font-medium">
-                        Languages: {lawyerData.languages.join(", ")}
-                      </span>
-                    </div>
-                  </div>
-                </>
-              ) : (
-                <form
-                  onSubmit={handleUpdateProfile}
-                  encType="multipart/form-data"
-                >
-                  <div className="space-y-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700">
-                        Username
-                      </label>
-                      <input
-                        type="text"
-                        name="username"
-                        value={formData.username}
-                        onChange={handleInputChange}
-                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary focus:ring focus:ring-primary focus:ring-opacity-50"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700">
-                        Email
-                      </label>
-                      <input
-                        type="email"
-                        name="email"
-                        value={formData.email}
-                        onChange={handleInputChange}
-                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary focus:ring focus:ring-primary focus:ring-opacity-50"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700">
-                        Specialization (comma-separated)
-                      </label>
-                      <input
-                        type="text"
-                        name="specialization"
-                        value={formData.specialization}
-                        onChange={handleInputChange}
-                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary focus:ring focus:ring-primary focus:ring-opacity-50"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700">
-                        Location
-                      </label>
-                      <input
-                        type="text"
-                        name="location"
-                        value={formData.location}
-                        onChange={handleInputChange}
-                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary focus:ring focus:ring-primary focus:ring-opacity-50"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700">
-                        Years of Experience
-                      </label>
-                      <input
-                        type="number"
-                        name="yearsOfExperience"
-                        value={formData.yearsOfExperience}
-                        onChange={handleInputChange}
-                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary focus:ring focus:ring-primary focus:ring-opacity-50"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700">
-                        Bio
-                      </label>
-                      <textarea
-                        name="bio"
-                        value={formData.bio}
-                        onChange={handleInputChange}
-                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary focus:ring focus:ring-primary focus:ring-opacity-50"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700">
-                        Certifications (comma-separated)
-                      </label>
-                      <input
-                        type="text"
-                        name="certifications"
-                        value={formData.certifications}
-                        onChange={handleInputChange}
-                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary focus:ring focus:ring-primary focus:ring-opacity-50"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700">
-                        Hourly Rate
-                      </label>
-                      <input
-                        type="number"
-                        name="hourlyRate"
-                        value={formData.hourlyRate}
-                        onChange={handleInputChange}
-                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary focus:ring focus:ring-primary focus:ring-opacity-50"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700">
-                        Languages (comma-separated)
-                      </label>
-                      <input
-                        type="text"
-                        name="languages"
-                        value={formData.languages}
-                        onChange={handleInputChange}
-                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary focus:ring focus:ring-primary focus:ring-opacity-50"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700">
-                        Available
-                      </label>
-                      <input
-                        type="checkbox"
-                        name="isAvailable"
-                        checked={formData.isAvailable}
-                        onChange={handleInputChange}
-                        className="mt-1 h-4 w-4 text-primary focus:ring-primary"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700">
-                        Profile Photo
-                      </label>
-                      <input
-                        type="file"
-                        name="profilePhoto"
-                        onChange={handleInputChange}
-                        className="mt-1 block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary file:text-primary-foreground hover:file:bg-primary/90"
-                      />
-                    </div>
-                    <button
-                      type="submit"
-                      className="mt-4 w-full bg-primary text-primary-foreground py-2 px-4 rounded-lg hover:bg-primary/90 transition-colors"
-                    >
-                      Save Changes
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setEditMode(false)}
-                      className="mt-2 w-full bg-gray-300 text-gray-800 py-2 px-4 rounded-lg hover:bg-gray-400 transition-colors"
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                </form>
+      {/* Profile header with compact layout */}
+      <div className="bg-white rounded-xl shadow-md overflow-hidden mb-6">
+        <div className="md:flex">
+          {/* Profile image section */}
+          <div className="md:w-1/3 bg-gray-50 p-6 flex flex-col items-center justify-center">
+            <div className="relative">
+              {editMode && (
+                <label htmlFor="profilePhoto" className="absolute bottom-0 right-0 bg-primary text-white rounded-full p-2 cursor-pointer shadow-lg">
+                  <Edit3 className="h-4 w-4" />
+                  <input
+                    type="file"
+                    id="profilePhoto"
+                    name="profilePhoto"
+                    onChange={handleFileChange}
+                    className="hidden"
+                    accept="image/*"
+                  />
+                </label>
               )}
+              <img
+                src={
+                  previewImage ||
+                  (lawyerData.profile_photo
+                    ? `http://localhost:5000/Uploads/profiles/${lawyerData.profile_photo}`
+                    : "https://via.placeholder.com/150")
+                }
+                alt={lawyerData.username}
+                className="h-40 w-40 rounded-full object-cover border-4 border-white shadow-lg"
+              />
+            </div>
+            <h1 className="text-2xl font-bold mt-4 text-center">{lawyerData.username}</h1>
+            <div className="flex items-center mt-2">
+              <div className="flex">
+                {[1, 2, 3, 4, 5].map((star) => (
+                  <Star
+                    key={star}
+                    className={`h-4 w-4 ${
+                      star <= (lawyerData.averageRating || 0)
+                        ? "text-yellow-400 fill-current"
+                        : "text-gray-300"
+                    }`}
+                  />
+                ))}
+              </div>
+              <span className="ml-2 text-sm text-gray-600">
+                {lawyerData.averageRating ? lawyerData.averageRating.toFixed(1) : "0"} 
+                ({lawyerData.ratingCount || 0})
+              </span>
+            </div>
+            <div className="mt-4 flex flex-wrap justify-center gap-2">
+              {Array.isArray(lawyerData.specialization) && lawyerData.specialization.map((spec, index) => (
+                <span key={index} className="px-2 py-1 bg-primary/10 text-primary text-xs rounded-full">
+                  {spec}
+                </span>
+              ))}
+            </div>
+            <div className="mt-4 flex items-center">
+              <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                lawyerData.isAvailable 
+                  ? "bg-green-100 text-green-800" 
+                  : "bg-red-100 text-red-800"
+              }`}>
+                {lawyerData.isAvailable ? "Available" : "Unavailable"}
+              </span>
             </div>
           </div>
 
-          {/* Right Column - Professional Details */}
-          <div className="lg:col-span-2">
-            <div className="bg-white rounded-lg shadow-lg p-6">
-              <h2 className="text-2xl font-semibold text-gray-800 mb-4">
-                Professional Details
-              </h2>
-              {!editMode ? (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div className="text-gray-600">
-                    <p className="font-medium">
-                      Certifications: {lawyerData.certifications.join(", ")}
-                    </p>
-                  </div>
+          {/* Profile details section */}
+          <div className="md:w-2/3 p-6">
+            {/* Tab navigation */}
+            <div className="flex border-b border-gray-200 mb-4">
+              <button
+                onClick={() => setActiveTab("about")}
+                className={`px-4 py-2 font-medium text-sm ${
+                  activeTab === "about"
+                    ? "text-primary border-b-2 border-primary"
+                    : "text-gray-500 hover:text-gray-700"
+                }`}
+              >
+                About
+              </button>
+              <button
+                onClick={() => setActiveTab("professional")}
+                className={`px-4 py-2 font-medium text-sm ${
+                  activeTab === "professional"
+                    ? "text-primary border-b-2 border-primary"
+                    : "text-gray-500 hover:text-gray-700"
+                }`}
+              >
+                Professional
+              </button>
+              <button
+                onClick={() => setActiveTab("contact")}
+                className={`px-4 py-2 font-medium text-sm ${
+                  activeTab === "contact"
+                    ? "text-primary border-b-2 border-primary"
+                    : "text-gray-500 hover:text-gray-700"
+                }`}
+              >
+                Contact
+              </button>
+              <button
+                onClick={() => setActiveTab("security")}
+                className={`px-4 py-2 font-medium text-sm ${
+                  activeTab === "security"
+                    ? "text-primary border-b-2 border-primary"
+                    : "text-gray-500 hover:text-gray-700"
+                }`}
+              >
+                Security
+              </button>
+            </div>
+
+            {/* Tab content */}
+            <div className="mt-4">
+              {/* About tab */}
+              {activeTab === "about" && (
+                <div>
+                  {!editMode ? (
+                    <>
+                      <p className="text-gray-700 mb-4">{lawyerData.bio || "No bio information provided."}</p>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="flex items-center">
+                          <Briefcase className="h-4 w-4 text-primary mr-2" />
+                          <span className="text-sm">{lawyerData.yearsOfExperience || "0"} years experience</span>
+                        </div>
+                        <div className="flex items-center">
+                          <MapPin className="h-4 w-4 text-primary mr-2" />
+                          <span className="text-sm">{lawyerData.location || "Not specified"}</span>
+                        </div>
+                        <div className="flex items-center">
+                          <DollarSign className="h-4 w-4 text-primary mr-2" />
+                          <span className="text-sm">${lawyerData.hourlyRate || "0"}/hour</span>
+                        </div>
+                        <div className="flex items-center">
+                          <Globe className="h-4 w-4 text-primary mr-2" />
+                          <span className="text-sm">
+                            {Array.isArray(lawyerData.languages) 
+                              ? lawyerData.languages.join(", ") 
+                              : lawyerData.languages || "Not specified"}
+                          </span>
+                        </div>
+                      </div>
+                    </>
+                  ) : (
+                    <form className="space-y-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Bio</label>
+                        <textarea
+                          name="bio"
+                          value={formData.bio}
+                          onChange={handleInputChange}
+                          rows="3"
+                          className="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary"
+                          placeholder="Tell clients about yourself..."
+                        ></textarea>
+                      </div>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Experience (years)</label>
+                          <input
+                            type="number"
+                            name="yearsOfExperience"
+                            value={formData.yearsOfExperience}
+                            onChange={handleInputChange}
+                            min="0"
+                            className="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Location</label>
+                          <input
+                            type="text"
+                            name="location"
+                            value={formData.location}
+                            onChange={handleInputChange}
+                            className="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Hourly Rate ($)</label>
+                          <input
+                            type="number"
+                            name="hourlyRate"
+                            value={formData.hourlyRate}
+                            onChange={handleInputChange}
+                            min="0"
+                            className="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Languages</label>
+                          <input
+                            type="text"
+                            name="languages"
+                            value={formData.languages}
+                            onChange={handleInputChange}
+                            className="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary"
+                            placeholder="English, Spanish, French"
+                          />
+                        </div>
+                      </div>
+                    </form>
+                  )}
                 </div>
-              ) : null}
+              )}
+
+              {/* Professional tab */}
+              {activeTab === "professional" && (
+                <div>
+                  {!editMode ? (
+                    <div className="space-y-4">
+                      <div>
+                        <h3 className="text-sm font-medium text-gray-700 mb-2 flex items-center">
+                          <Award className="h-4 w-4 mr-2 text-primary" />
+                          Specializations
+                        </h3>
+                        <div className="flex flex-wrap gap-2">
+                          {Array.isArray(lawyerData.specialization) && lawyerData.specialization.length > 0 ? (
+                            lawyerData.specialization.map((spec, index) => (
+                              <span key={index} className="px-2 py-1 bg-primary/10 text-primary text-xs rounded-full">
+                                {spec}
+                              </span>
+                            ))
+                          ) : (
+                            <p className="text-gray-500 text-sm">No specializations listed</p>
+                          )}
+                        </div>
+                      </div>
+                      
+                      <div>
+                        <h3 className="text-sm font-medium text-gray-700 mb-2 flex items-center">
+                          <FileText className="h-4 w-4 mr-2 text-primary" />
+                          Certifications
+                        </h3>
+                        <div className="flex flex-wrap gap-2">
+                          {Array.isArray(lawyerData.certifications) && lawyerData.certifications.length > 0 ? (
+                            lawyerData.certifications.map((cert, index) => (
+                              <span key={index} className="px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full">
+                                {cert}
+                              </span>
+                            ))
+                          ) : (
+                            <p className="text-gray-500 text-sm">No certifications listed</p>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">Specializations</label>
+                        <div className="grid grid-cols-2 gap-2 border border-gray-200 rounded-md p-3 bg-white">
+                          {validSpecializations.map((spec) => (
+                            <div key={spec} className="flex items-center">
+                              <input
+                                type="checkbox"
+                                id={`spec-${spec}`}
+                                checked={selectedSpecializations.includes(spec)}
+                                onChange={() => {
+                                  if (selectedSpecializations.includes(spec)) {
+                                    setSelectedSpecializations(selectedSpecializations.filter(s => s !== spec));
+                                  } else {
+                                    setSelectedSpecializations([...selectedSpecializations, spec]);
+                                  }
+                                }}
+                                className="h-4 w-4 text-primary focus:ring-primary border-gray-300 rounded"
+                              />
+                              <label htmlFor={`spec-${spec}`} className="ml-2 text-sm text-gray-700">
+                                {spec}
+                              </label>
+                            </div>
+                          ))}
+                        </div>
+                        <div className="mt-3">
+                          <p className="text-sm font-medium text-gray-700 mb-2">Selected specializations:</p>
+                          <div className="flex flex-wrap gap-2">
+                            {selectedSpecializations.length > 0 ? (
+                              selectedSpecializations.map((spec, index) => (
+                                <span key={index} className="px-2 py-1 bg-primary/10 text-primary text-xs rounded-full">
+                                  {spec}
+                                </span>
+                              ))
+                            ) : (
+                              <span className="text-gray-500 text-sm">No specializations selected</span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                      
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Certifications</label>
+                        <input
+                          type="text"
+                          name="certifications"
+                          value={formData.certifications}
+                          onChange={handleInputChange}
+                          placeholder="Bar Association, Legal Certification"
+                          className="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary"
+                        />
+                      </div>
+                      
+                      <div className="flex items-center">
+                        <input
+                          type="checkbox"
+                          id="isAvailable"
+                          name="isAvailable"
+                          checked={formData.isAvailable}
+                          onChange={handleInputChange}
+                          className="h-4 w-4 text-primary focus:ring-primary border-gray-300 rounded"
+                        />
+                        <label htmlFor="isAvailable" className="ml-2 text-sm text-gray-700">
+                          Available for new cases
+                        </label>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Contact tab */}
+              {activeTab === "contact" && (
+                <div>
+                  {!editMode ? (
+                    <div className="space-y-3">
+                      <div className="flex items-center">
+                        <Mail className="h-4 w-4 text-primary mr-2" />
+                        <span className="text-sm">
+                          {lawyerData.email || authUser?.email || "Email not provided"}
+                        </span>
+                      </div>
+                      <div className="flex items-center">
+                        <User className="h-4 w-4 text-primary mr-2" />
+                        <span className="text-sm">{lawyerData.username || "Username not provided"}</span>
+                      </div>
+                      {lawyerData.phone && (
+                        <div className="flex items-center">
+                          <Phone className="h-4 w-4 text-primary mr-2" />
+                          <span className="text-sm">{lawyerData.phone}</span>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+                        <input
+                          type="email"
+                          name="email"
+                          value={formData.email}
+                          onChange={handleInputChange}
+                          className="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary"
+                        />
+                        <p className="mt-1 text-xs text-gray-500">
+                          Note: Changing your email will require admin verification
+                        </p>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Username</label>
+                        <input
+                          type="text"
+                          name="username"
+                          value={formData.username}
+                          onChange={handleInputChange}
+                          className="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary"
+                        />
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Security tab */}
+              {activeTab === "security" && (
+                <div>
+                  <h3 className="text-lg font-medium text-gray-900 mb-4">Change Password</h3>
+                  
+                  {passwordSuccess && (
+                    <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-lg flex items-center">
+                      <CheckCircle className="h-5 w-5 text-green-500 mr-2" />
+                      <p className="text-green-700">{passwordSuccess}</p>
+                    </div>
+                  )}
+                  
+                  {passwordError && (
+                    <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg flex items-center">
+                      <XCircle className="h-5 w-5 text-red-500 mr-2" />
+                      <p className="text-red-700">{passwordError}</p>
+                    </div>
+                  )}
+                  
+                  <form onSubmit={handleChangePassword} className="space-y-4">
+                    <div>
+                      <label htmlFor="currentPassword" className="block text-sm font-medium text-gray-700 mb-1">
+                        Current Password
+                      </label>
+                      <input
+                        type="password"
+                        id="currentPassword"
+                        name="currentPassword"
+                        value={passwordForm.currentPassword}
+                        onChange={handlePasswordChange}
+                        className="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary"
+                        required
+                      />
+                    </div>
+                    
+                    <div>
+                      <label htmlFor="newPassword" className="block text-sm font-medium text-gray-700 mb-1">
+                        New Password
+                      </label>
+                      <input
+                        type="password"
+                        id="newPassword"
+                        name="newPassword"
+                        value={passwordForm.newPassword}
+                        onChange={handlePasswordChange}
+                        className="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary"
+                        required
+                        minLength={8}
+                      />
+                      <p className="mt-1 text-xs text-gray-500">
+                        Password must be at least 8 characters long
+                      </p>
+                    </div>
+                    
+                    <div>
+                      <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700 mb-1">
+                        Confirm New Password
+                      </label>
+                      <input
+                        type="password"
+                        id="confirmPassword"
+                        name="confirmPassword"
+                        value={passwordForm.confirmPassword}
+                        onChange={handlePasswordChange}
+                        className="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary"
+                        required
+                      />
+                    </div>
+                    
+                    <div>
+                      <button
+                        type="submit"
+                        disabled={passwordLoading}
+                        className="inline-flex items-center px-4 py-2 bg-primary text-white rounded-lg shadow hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        {passwordLoading ? (
+                          <>
+                            <div className="animate-spin h-4 w-4 mr-2 border-2 border-white border-t-transparent rounded-full"></div>
+                            Changing Password...
+                          </>
+                        ) : (
+                          "Change Password"
+                        )}
+                      </button>
+                    </div>
+                  </form>
+                </div>
+              )}
             </div>
           </div>
         </div>

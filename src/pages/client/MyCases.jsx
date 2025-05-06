@@ -1,28 +1,40 @@
-"use client";
-
-import { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
-import { Briefcase, Filter } from "lucide-react";
+import { Filter, Briefcase } from "lucide-react";
 
-// Helper function to map status to color
-const getStatusColor = (status) => {
-  switch (status.toLowerCase()) {
-    case "posted":
-      return "bg-yellow-400";
-    case "assigned":
-      return "bg-blue-500";
-    case "closed":
-      return "bg-primary";
-    default:
-      return "bg-gray-400"; // Fallback color for unknown statuses
-  }
-};
-
-export default function MyCases({ userRole }) {
+export default function MyCases() {
   const [cases, setCases] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState("all");
   const [error, setError] = useState(null);
+  const [filter, setFilter] = useState("all");
+
+  const filteredCases = cases.filter((caseItem) => {
+    if (filter === "all") return true;
+    return caseItem.status.toLowerCase() === filter;
+  });
+
+  const getStatusColor = (status) => {
+    switch (status.toLowerCase()) {
+      case "posted":
+        return "bg-yellow-400";
+      case "assigned":
+        return "bg-blue-500";
+      case "closed":
+        return "bg-primary";
+      default:
+        return "bg-gray-500";
+    }
+  };
+
+  const CaseStatus = ({ color, label, description }) => (
+    <div className="flex items-center space-x-3">
+      <div className={`w-3 h-3 rounded-full ${color}`}></div>
+      <div>
+        <p className="font-medium text-foreground">{label}</p>
+        <p className="text-xs text-muted-foreground">{description}</p>
+      </div>
+    </div>
+  );
 
   useEffect(() => {
     const fetchCases = async () => {
@@ -38,7 +50,7 @@ export default function MyCases({ userRole }) {
           },
         });
 
-        const text = await res.text(); // Read response as text
+        const text = await res.text();
         if (!res.ok) {
           let errorData;
           try {
@@ -49,7 +61,7 @@ export default function MyCases({ userRole }) {
           throw new Error(errorData.message || "Failed to fetch cases.");
         }
 
-        const data = JSON.parse(text); // Parse response
+        const data = JSON.parse(text);
         setCases(data.cases);
       } catch (err) {
         console.error("Error fetching cases:", err);
@@ -62,11 +74,6 @@ export default function MyCases({ userRole }) {
     fetchCases();
   }, []);
 
-  const filteredCases =
-    filter === "all"
-      ? cases
-      : cases.filter((c) => c.status.toLowerCase() === filter);
-
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -77,33 +84,61 @@ export default function MyCases({ userRole }) {
 
   return (
     <div className="font-inter bg-background text-foreground">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="flex items-center justify-between mb-8">
-          <div className="relative inline-block">
-            <p className="text-lg font-bold text-foreground bg-gradient-to-r from-primary/10 to-primary/20 px-4 py-2 rounded-full shadow-md animate-pulse">
-              {filteredCases.length} Total Cases
+      {/* Header Section */}
+      <div className="bg-gradient-to-r from-primary to-primary/80 text-primary-foreground py-6">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between">
+            <h1 className="text-2xl md:text-3xl font-bold mb-4 md:mb-0">My Legal Cases</h1>
+            <div className="flex space-x-3">
+              <div className="relative">
+                <Filter className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-5 w-5" />
+                <select
+                  value={filter}
+                  onChange={(e) => setFilter(e.target.value)}
+                  className="pl-10 pr-4 py-2 border border-primary/30 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-foreground bg-primary-foreground/90"
+                >
+                  <option value="all">All Cases</option>
+                  <option value="posted">Posted</option>
+                  <option value="assigned">Assigned</option>
+                  <option value="closed">Closed</option>
+                </select>
+              </div>
+              <Link
+                to={`/client/cases/post`}
+                className="inline-flex items-center px-4 py-2 bg-primary-foreground text-primary rounded-lg hover:bg-primary-foreground/90 focus:outline-none focus:ring-2 focus:ring-primary border border-primary/30"
+              >
+                Post a New Case
+              </Link>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        {/* Status Guide and Case Count */}
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-6 bg-card text-card-foreground rounded-lg shadow-sm p-4">
+          <div className="relative inline-block mb-4 md:mb-0">
+            <p className="text-lg font-bold text-foreground bg-gradient-to-r from-primary/10 to-primary/20 px-4 py-2 rounded-full shadow-md">
+              {filteredCases.length} {filter !== "all" ? filter : "Total"} Cases
             </p>
           </div>
-          <div className="flex space-x-3">
-            <div className="relative">
-              <Filter className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-5 w-5" />
-              <select
-                value={filter}
-                onChange={(e) => setFilter(e.target.value)}
-                className="pl-10 pr-4 py-2 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-foreground bg-card"
-              >
-                <option value="all">All Cases</option>
-                <option value="posted">Posted</option>
-                <option value="assigned">Assigned</option>
-                <option value="closed">Closed</option>
-              </select>
-            </div>
-            <Link
-              to={`/client/cases/post`}
-              className="inline-flex items-center px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-primary"
-            >
-              Post a New Case
-            </Link>
+          
+          <div className="flex flex-wrap gap-4">
+            <CaseStatus
+              color="bg-yellow-400"
+              label="Posted"
+              description="Waiting for lawyers"
+            />
+            <CaseStatus
+              color="bg-blue-500"
+              label="Assigned"
+              description="Being worked on"
+            />
+            <CaseStatus
+              color="bg-primary"
+              label="Closed"
+              description="Resolved or cancelled"
+            />
           </div>
         </div>
 
@@ -114,37 +149,39 @@ export default function MyCases({ userRole }) {
         )}
 
         {filteredCases.length > 0 ? (
-          <div className="bg-card text-card-foreground rounded-lg shadow-md p-8">
-            <ul className="divide-y divide-border">
-              {filteredCases.map((caseItem) => (
-                <li
-                  key={caseItem._id}
-                  className="py-6 px-4 transition-all duration-300 hover:bg-gradient-to-r hover:from-primary/5 hover:to-primary/10 hover:shadow-xl hover:scale-[1.02] rounded-lg hover:border hover:border-primary/30"
-                >
-                  <Link to={`/client/cases/${caseItem._id}`} className="block">
-                    <div className="flex items-center justify-between mb-3">
-                      <div className="font-semibold text-xl">
-                        {caseItem.category}
-                      </div>
-                      <span
-                        className={`px-4 py-1.5 text-sm text-white rounded-full ${getStatusColor(
-                          caseItem.status
-                        )}`}
-                      >
-                        {caseItem.status}
-                      </span>
-                    </div>
-                    <div className="text-muted-foreground mb-2 text-base">
-                      {caseItem.description}
-                    </div>
-                    <div className="text-sm text-gray-500">
-                      Deadline:{" "}
-                      {new Date(caseItem.deadline).toLocaleDateString()}
-                    </div>
-                  </Link>
-                </li>
-              ))}
-            </ul>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {filteredCases.map((caseItem) => (
+              <Link 
+                to={`/client/cases/${caseItem._id}`} 
+                key={caseItem._id}
+                className="bg-card text-card-foreground rounded-lg shadow-md p-5 hover:shadow-lg transition-all duration-300 hover:bg-gradient-to-r hover:from-primary/5 hover:to-primary/10 hover:scale-[1.02] hover:border hover:border-primary/30"
+              >
+                <div className="flex items-center justify-between mb-3">
+                  <div className="font-semibold text-xl truncate pr-2">
+                    {caseItem.category}
+                  </div>
+                  <span
+                    className={`px-3 py-1 text-xs text-white rounded-full ${getStatusColor(
+                      caseItem.status
+                    )}`}
+                  >
+                    {caseItem.status}
+                  </span>
+                </div>
+                <div className="text-muted-foreground mb-3 text-sm line-clamp-2">
+                  {caseItem.description}
+                </div>
+                <div className="flex justify-between items-center text-xs text-gray-500">
+                  <div>
+                    Deadline: {new Date(caseItem.deadline).toLocaleDateString()}
+                  </div>
+                  <div className="flex items-center">
+                    <Briefcase className="h-3 w-3 mr-1" />
+                    {caseItem.status === "Assigned" ? "Lawyer assigned" : "Awaiting bids"}
+                  </div>
+                </div>
+              </Link>
+            ))}
           </div>
         ) : (
           <div className="bg-card text-card-foreground rounded-lg shadow-md p-8 text-center py-14">
@@ -153,7 +190,7 @@ export default function MyCases({ userRole }) {
               No cases found
             </h3>
             <p className="text-muted-foreground mb-6">
-              You don’t have any cases yet.
+              You don't have any cases yet.
             </p>
             <Link
               to={`/client/cases/post`}
@@ -163,45 +200,6 @@ export default function MyCases({ userRole }) {
             </Link>
           </div>
         )}
-
-        <div className="bg-card text-card-foreground rounded-lg shadow-md p-8 mt-8">
-          <h2 className="text-xl font-semibold text-foreground mb-6">
-            Case Status Guide
-          </h2>
-          <div className="flex flex-col sm:flex-row sm:space-x-8 space-y-6 sm:space-y-0">
-            <CaseStatus
-              color="bg-yellow-400"
-              label="Posted"
-              description="Case is posted and waiting for lawyers"
-            />
-            <CaseStatus
-              color="bg-blue-500"
-              label="Assigned"
-              description="Case is currently being worked on"
-            />
-            <CaseStatus
-              color="bg-primary"
-              label="Closed"
-              description="Case has been resolved or cancelled"
-            />
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function CaseStatus({ color, label, description }) {
-  return (
-    <div className="flex items-center">
-      <span
-        className={`h-6 w-6 rounded-full ${color} flex items-center justify-center mr-3`}
-      >
-        <span className="text-white text-xs">✔</span>
-      </span>
-      <div>
-        <p className="text-base font-medium text-foreground">{label}</p>
-        <p className="text-sm text-muted-foreground">{description}</p>
       </div>
     </div>
   );

@@ -9,6 +9,8 @@ import {
   Calendar,
   CheckCircle,
   ChevronDownCircle,
+  Search,
+  ArrowRight,
 } from "lucide-react";
 import { jwtDecode } from "jwt-decode";
 
@@ -19,6 +21,7 @@ export default function LawyerCase({ userName }) {
   const [error, setError] = useState(null);
   const [selectedStatus, setSelectedStatus] = useState("all");
   const [userId, setUserId] = useState(null);
+  const [searchTerm, setSearchTerm] = useState("");
 
   // Decode token to get userId
   useEffect(() => {
@@ -36,7 +39,6 @@ export default function LawyerCase({ userName }) {
         throw new Error("User ID not found in token.");
       }
       setUserId(decoded.id);
-      console.log("Decoded userId:", decoded.id);
     } catch (err) {
       console.error("Error decoding token:", err);
       setError("Failed to authenticate. Please log in again.");
@@ -71,7 +73,6 @@ export default function LawyerCase({ userName }) {
         }
 
         const data = await response.json();
-        console.log("API response:", data);
 
         // Validate cases data
         if (!Array.isArray(data.cases)) {
@@ -83,11 +84,6 @@ export default function LawyerCase({ userName }) {
           (caseItem) => caseItem.assigned_lawyer?._id === userId
         );
 
-        if (assignedCases.length === 0) {
-          console.log("No assigned cases found for this lawyer.");
-        }
-
-        console.log("Assigned cases:", assignedCases);
         setCases(assignedCases);
         setFilteredCase(assignedCases);
       } catch (err) {
@@ -107,7 +103,7 @@ export default function LawyerCase({ userName }) {
 
   // Helper function to map backend status to frontend status
   const mapStatus = (backendStatus) => {
-    switch (backendStatus.toLowerCase()) {
+    switch (backendStatus?.toLowerCase()) {
       case "posted":
         return "started";
       case "assigned":
@@ -119,68 +115,73 @@ export default function LawyerCase({ userName }) {
     }
   };
 
+  // Get status color for buttons
+  const getStatusButtonColor = (status) => {
+    switch (status) {
+      case "started":
+        return "bg-amber-500 text-white";
+      case "on progress":
+        return "bg-primary text-primary-foreground";
+      case "completed":
+        return "bg-green-600 text-white";
+      default:
+        return "bg-primary text-primary-foreground";
+    }
+  };
+
+  // Get status color for badges
+  const getStatusBadgeColor = (backendStatus) => {
+    const status = mapStatus(backendStatus);
+    switch (status) {
+      case "started":
+        return "bg-amber-500";
+      case "on progress":
+        return "bg-primary";
+      case "completed":
+        return "bg-green-600";
+      default:
+        return "bg-gray-500";
+    }
+  };
+
+  // Get status icon color
+  const getStatusIconColor = (status) => {
+    switch (status) {
+      case "started":
+        return "text-amber-500";
+      case "on progress":
+        return "text-primary";
+      case "completed":
+        return "text-green-600";
+      default:
+        return "text-gray-500";
+    }
+  };
+
   useEffect(() => {
-    // Filter cases based on selected status
-    if (selectedStatus === "all") {
-      setFilteredCase(cases);
-    } else {
-      const filtered = cases.filter(
+    // Filter cases based on selected status and search term
+    let filtered = cases;
+    
+    // Filter by status
+    if (selectedStatus !== "all") {
+      filtered = filtered.filter(
         (caseItem) => mapStatus(caseItem.status) === selectedStatus
       );
-      setFilteredCase(filtered);
     }
-    console.log("Filtered cases:", filteredCase); // Debugging
-  }, [selectedStatus, cases]);
-
-  const formatDate = (dateString) => {
-    const date = new Date(dateString);
-    if (isNaN(date.getTime())) {
-      return "Invalid Date";
+    
+    // Filter by search term
+    if (searchTerm.trim() !== "") {
+      const term = searchTerm.toLowerCase();
+      filtered = filtered.filter(
+        (caseItem) => 
+          caseItem.category?.toLowerCase().includes(term) || 
+          caseItem.description?.toLowerCase().includes(term) ||
+          caseItem.client?.username?.toLowerCase().includes(term)
+      );
     }
-    return new Intl.DateTimeFormat("en-US", {
-      month: "short",
-      day: "numeric",
-      year: "numeric",
-    }).format(date);
-  };
-
-  const formatCurrency = (amount) => {
-    if (typeof amount !== "number") {
-      return "N/A";
-    }
-    return new Intl.NumberFormat("en-US", {
-      style: "currency",
-      currency: "ETB",
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0,
-    }).format(amount);
-  };
-
-  const getStatusIcon = (status) => {
-    switch (status) {
-      case "started":
-        return <Clock className="h-5 w-5 text-yellow-500" />;
-      case "on progress":
-        return <ChevronDownCircle className="h-5 w-5 text-green-500" />;
-      case "completed":
-        return <CheckCircle className="h-5 w-5 text-blue-500" />;
-      default:
-        return <Clock className="h-5 w-5 text-gray-500" />;
-    }
-  };
-
-  const getStatusColor = (status) => {
-    switch (status) {
-      case "started":
-        return "bg-yellow-100 text-yellow-800";
-      case "on progress":
-        return "bg-green-100 text-green-800";
-      case "completed":
-        return "bg-blue-100 text-blue-800";
-      default:
-        return "bg-gray-100 text-gray-800";
-    }
-  };
+    
+    setFilteredCase(filtered);
+  }, [selectedStatus, cases, searchTerm]);
 
   if (loading) {
     return (
@@ -197,122 +198,130 @@ export default function LawyerCase({ userName }) {
   return (
     <div className="font-inter bg-background text-foreground min-h-screen">
       {/* Header */}
-      <div className="bg-gradient-to-r from-primary to-primary/80 text-primary-foreground py-8">
+      <div className="bg-gradient-to-r from-primary to-primary/80 text-primary-foreground py-6">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <h1 className="text-2xl md:text-3xl font-bold">Cases On My Hand</h1>
         </div>
       </div>
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Filter Section */}
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-6">
-          <div className="mb-4 md:mb-0">
-            <h2 className="text-xl font-semibold text-foreground">
-              {filteredCase.length}{" "}
-              {selectedStatus === "all" ? "Total" : selectedStatus} Cases
-            </h2>
-          </div>
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        {/* Filter Section - Horizontal Layout */}
+        <div className="bg-card text-card-foreground rounded-lg shadow-md p-4 mb-6">
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+            <div className="flex items-center">
+              <h2 className="text-xl font-semibold text-foreground mr-4">
+                {filteredCase.length}{" "}
+                {selectedStatus === "all" ? "Total" : selectedStatus} Cases
+              </h2>
 
-          <div className="relative w-full md:w-64">
-            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-              <Filter className="h-5 w-5 text-gray-400" />
+              {/* Status Filter */}
+              <div className="flex items-center space-x-1">
+                <button
+                  onClick={() => setSelectedStatus("all")}
+                  className={`px-3 py-1.5 rounded-full text-sm font-medium transition-all duration-200 ${
+                    selectedStatus === "all"
+                      ? "bg-primary text-primary-foreground"
+                      : "bg-muted text-muted-foreground hover:bg-muted/80"
+                  }`}
+                >
+                  All
+                </button>
+                <button
+                  onClick={() => setSelectedStatus("started")}
+                  className={`px-3 py-1.5 rounded-full text-sm font-medium transition-all duration-200 ${
+                    selectedStatus === "started"
+                      ? getStatusButtonColor("started")
+                      : "bg-muted text-muted-foreground hover:bg-muted/80"
+                  }`}
+                >
+                  Started
+                </button>
+                <button
+                  onClick={() => setSelectedStatus("on progress")}
+                  className={`px-3 py-1.5 rounded-full text-sm font-medium transition-all duration-200 ${
+                    selectedStatus === "on progress"
+                      ? getStatusButtonColor("on progress")
+                      : "bg-muted text-muted-foreground hover:bg-muted/80"
+                  }`}
+                >
+                  On Progress
+                </button>
+                <button
+                  onClick={() => setSelectedStatus("completed")}
+                  className={`px-3 py-1.5 rounded-full text-sm font-medium transition-all duration-200 ${
+                    selectedStatus === "completed"
+                      ? getStatusButtonColor("completed")
+                      : "bg-muted text-muted-foreground hover:bg-muted/80"
+                  }`}
+                >
+                  Completed
+                </button>
+              </div>
             </div>
-            <select
-              value={selectedStatus}
-              onChange={(e) => setSelectedStatus(e.target.value)}
-              className="block w-full pl-10 pr-3 py-2 border border-gray-200 rounded-lg leading-5 bg-white focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary sm:text-sm"
-            >
-              <option value="all">All Cases</option>
-              <option value="started">Started</option>
-              <option value="on progress">On Progress</option>
-              <option value="completed">Completed</option>
-            </select>
+
+            {/* Search Bar */}
+            <div className="relative w-full md:w-64">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <input
+                type="text"
+                placeholder="Search cases..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full pl-10 pr-4 py-2 rounded-lg border border-border focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
+              />
+            </div>
           </div>
         </div>
 
-        {/* Case List */}
+        {/* Case List - Grid Layout */}
         {filteredCase.length ? (
-          <div className="bg-card text-card-foreground rounded-lg shadow-md p-8">
-            <ul className="divide-y divide-border">
-              {filteredCase.map((caseItem) => (
-                <li
-                  key={caseItem._id}
-                  className="py-6 px-4 transition-all duration-300 hover:bg-gradient-to-r hover:from-primary/5 hover:to-primary/10 hover:shadow-xl hover:scale-[1.02] rounded-lg hover:border hover:border-primary/30"
-                >
-                  <Link
-                    to={`/lawyer/lawyerCase/${caseItem._id}`}
-                    className="block"
-                  >
-                    <div className="px-6 py-5">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center">
-                          <div className="flex-shrink-0">
-                            <div className="h-12 w-12 rounded-full bg-purple-100 flex items-center justify-center">
-                              <Briefcase className="h-6 w-6 text-primary" />
-                            </div>
-                          </div>
-                          <div className="ml-4">
-                            <div className="flex items-center">
-                              {getStatusIcon(mapStatus(caseItem.status))}
-                              <span
-                                className={`ml-2 px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(
-                                  mapStatus(caseItem.status)
-                                )}`}
-                              >
-                                {mapStatus(caseItem.status)
-                                  .charAt(0)
-                                  .toUpperCase() +
-                                  mapStatus(caseItem.status).slice(1)}
-                              </span>
-                            </div>
-                            <div className="mt-1 text-sm text-gray-500">
-                              <span className="flex items-center">
-                                <FileText className="mr-1 h-4 w-4 text-gray-400" />
-                                Client:{" "}
-                                {caseItem.client?.username || "Unknown Client"}
-                              </span>
-                            </div>
-                            <div className="mt-1 flex items-center text-sm text-gray-500">
-                              <DollarSign className="mr-1 h-4 w-4 text-gray-400" />
-                              Bid Amount:{" "}
-                              {formatCurrency(
-                                caseItem.winning_bid?.amount || 0
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                        <div className="flex flex-col items-end">
-                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 mb-2">
-                            {caseItem.category || "Other"}
-                          </span>
-                          <div className="flex items-center text-sm text-gray-500">
-                            <Clock className="mr-1 h-4 w-4 text-gray-400" />
-                            Started Date:{" "}
-                            {formatDate(
-                              caseItem.createdAt || new Date().toISOString()
-                            )}
-                          </div>
-                          <div className="flex items-center text-sm text-gray-500 mt-1">
-                            <Calendar className="mr-1 h-4 w-4 text-gray-400" />
-                            Expected to End:{" "}
-                            {formatDate(
-                              caseItem.deadline || new Date().toISOString()
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                      <div className="mt-2 ml-16">
-                        <p className="text-sm text-gray-600 line-clamp-2">
-                          {caseItem.notes && caseItem.notes.length > 0
-                            ? caseItem.notes[0].content
-                            : "No notes available."}
-                        </p>
-                      </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {filteredCase.map((caseItem) => (
+              <Link
+                key={caseItem._id}
+                to={`/lawyer/lawyerCase/${caseItem._id}`}
+                className="bg-card text-card-foreground rounded-lg shadow-md p-5 hover:shadow-lg transition-all duration-300 hover:bg-gradient-to-r hover:from-primary/5 hover:to-primary/10 hover:scale-[1.02] hover:border hover:border-primary/30"
+              >
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center">
+                    <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center mr-3 flex-shrink-0">
+                      <Briefcase className="h-5 w-5 text-primary" />
                     </div>
-                  </Link>
-                </li>
-              ))}
-            </ul>
+                    <div>
+                      <h3 className="font-semibold text-foreground">
+                        {caseItem.category || "Uncategorized"}
+                      </h3>
+                      <p className="text-xs text-muted-foreground">
+                        Client: {caseItem.client?.username || "Unknown"}
+                      </p>
+                    </div>
+                  </div>
+                  <span
+                    className={`px-2 py-1 text-xs text-white rounded-full ${getStatusBadgeColor(
+                      caseItem.status
+                    )}`}
+                  >
+                    {mapStatus(caseItem.status)}
+                  </span>
+                </div>
+                <div className="mt-2 text-sm text-gray-600 line-clamp-2">
+                  {caseItem.notes && caseItem.notes.length > 0
+                    ? caseItem.notes[0].content
+                    : caseItem.description || "No description available."}
+                </div>
+                <div className="mt-3 pt-3 border-t border-border/50 flex justify-between items-center text-xs text-gray-500">
+                  <div className="flex items-center">
+                    <Calendar className="h-3 w-3 mr-1" />
+                    {caseItem.deadline
+                      ? new Date(caseItem.deadline).toLocaleDateString()
+                      : "No deadline"}
+                  </div>
+                  <div className="flex items-center text-primary font-medium">
+                    View Details <ArrowRight className="h-3 w-3 ml-1" />
+                  </div>
+                </div>
+              </Link>
+            ))}
           </div>
         ) : (
           <div className="bg-card text-card-foreground rounded-lg shadow-md p-8 text-center hover:shadow-lg hover:bg-gradient-to-r hover:from-primary/5 hover:to-primary/10 transition-all duration-300">
@@ -327,15 +336,18 @@ export default function LawyerCase({ userName }) {
             </p>
           </div>
         )}
-
-        {/* Case Status Guide */}
-        <div className="mt-8 bg-card text-card-foreground rounded-lg shadow-md p-6 hover:shadow-lg hover:bg-gradient-to-r hover:from-primary/5 hover:to-primary/10 transition-all duration-300">
-          <h3 className="text-lg font-semibold text-foreground mb-4">
+        {/* Case Status Guide - Horizontal Layout */}
+        <div className="bg-card text-card-foreground rounded-lg shadow-md p-4 mb-6 hover:shadow-lg hover:bg-gradient-to-r hover:from-primary/5 hover:to-primary/10 transition-all duration-300">
+          <h3 className="text-lg font-semibold text-foreground mb-3">
             Case Status Guide
           </h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div className="flex items-center">
-              <Clock className="h-5 w-5 text-yellow-500 mr-2" />
+              <Clock
+                className={`h-5 w-5 ${getStatusIconColor(
+                  "started"
+                )} mr-2 flex-shrink-0`}
+              />
               <div>
                 <p className="font-medium text-foreground">Started</p>
                 <p className="text-sm text-gray-500">
@@ -344,17 +356,29 @@ export default function LawyerCase({ userName }) {
               </div>
             </div>
             <div className="flex items-center">
-              <ChevronDownCircle className="h-5 w-5 text-green-500 mr-2" />
+              <ChevronDownCircle
+                className={`h-5 w-5 ${getStatusIconColor(
+                  "on progress"
+                )} mr-2 flex-shrink-0`}
+              />
               <div>
                 <p className="font-medium text-foreground">On Progress</p>
-                <p className="text-sm text-gray-500">The case is in progress</p>
+                <p className="text-sm text-gray-500">
+                  The case is being worked on
+                </p>
               </div>
             </div>
             <div className="flex items-center">
-              <CheckCircle className="h-5 w-5 text-blue-500 mr-2" />
+              <CheckCircle
+                className={`h-5 w-5 ${getStatusIconColor(
+                  "completed"
+                )} mr-2 flex-shrink-0`}
+              />
               <div>
                 <p className="font-medium text-foreground">Completed</p>
-                <p className="text-sm text-gray-500">The case is completed</p>
+                <p className="text-sm text-gray-500">
+                  The case has been resolved
+                </p>
               </div>
             </div>
           </div>

@@ -41,7 +41,7 @@ export default function FindLawyers({ userRole }) {
 
         // Build query parameters
       
-console.log(token)
+// console.log(token)
         const response = await fetch(
           `http://localhost:5000/api/users/lawyers`,
           {
