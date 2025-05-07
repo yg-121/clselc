@@ -1,33 +1,54 @@
-import axios from "axios"
+import axios from 'axios'
 
-// Use relative URL for API requests (will be proxied by Vite)
-const API_URL = ""
-
+// Create an axios instance with the base URL
 const api = axios.create({
-  baseURL: API_URL,
+  baseURL: import.meta.env.VITE_API_URL || 'http://localhost:5000/api',
+  timeout: 10000,
+  headers: {
+    'Content-Type': 'application/json',
+  },
 })
 
-// Add a request interceptor to add the auth token to requests
+// Add request interceptor to add auth token
 api.interceptors.request.use(
   (config) => {
-    const token = localStorage.getItem("token")
+    // Log the request for debugging
+    console.log(`🔍 API Request: ${config.method.toUpperCase()} ${config.baseURL}${config.url}`)
+    
+    const token = localStorage.getItem('token')
     if (token) {
       config.headers.Authorization = `Bearer ${token}`
     }
     return config
   },
-  (error) => Promise.reject(error),
+  (error) => {
+    console.error('❌ API Request Error:', error)
+    return Promise.reject(error)
+  }
+)
+
+// Add response interceptor for debugging
+api.interceptors.response.use(
+  (response) => {
+    console.log(`✅ API Response: ${response.status} from ${response.config.url}`)
+    return response
+  },
+  (error) => {
+    console.error(`❌ API Response Error: ${error.response?.status || 'Unknown'} from ${error.config?.url}`)
+    console.error('Error details:', error.response?.data || error.message)
+    return Promise.reject(error)
+  }
 )
 
 // Auth endpoints
 export const auth = {
   register: (data) =>
-    api.post("/api/auth/register", data, {
+    api.post("/auth/register", data, {
       headers: { "Content-Type": "multipart/form-data" },
     }),
-  login: (data) => api.post("/api/auth/login", data),
-  forgotPassword: (data) => api.post("/api/auth/forgot-password", data),
-  resetPassword: (data) => api.post("/api/auth/reset-password", data),
+  login: (data) => api.post("/auth/login", data),
+  forgotPassword: (data) => api.post("/auth/forgot-password", data),
+  resetPassword: (data) => api.post("/auth/reset-password", data),
 }
 
 // Client endpoints

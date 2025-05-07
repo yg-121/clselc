@@ -1,625 +1,775 @@
-/* eslint-disable no-dupe-else-if */
-
-"use client"
-
-import { useState, useMemo } from "react"
+import { useState } from "react"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
-import { Trash2, UserPlus, Shield } from "react-feather"
-import api, { handleApiError } from "../../utils/api"
-import DataTable from "../../components/admin/DataTable"
-import Modal from "../../components/admin/Modal"
-import ErrorAlert from "../../components/admin/ErrorAlert"
-import { toast } from "react-toastify"
-import SimpleUserList from "./SimpleUserList" // Import the SimpleUserList component
+import api from "../../services/api"
+import { Card, CardContent, CardHeader, CardTitle } from "../../components/ui/card"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "../../components/ui/tabs"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../../components/ui/table"
+import { Button } from "../../components/ui/button"
+import { Input } from "../../components/ui/input"
+import { Badge } from "../../components/ui/badge"
+import { Search, UserCheck, UserX, UserPlus, FileText, Shield, Trash2, AlertTriangle } from "lucide-react"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "../../components/ui/dialog"
+import { toast, ToastContainer } from "react-toastify"
+import "react-toastify/dist/ReactToastify.css"
 
-const Users = () => {
-  const queryClient = useQueryClient()
-  const [error, setError] = useState("")
-  const [roleFilter, setRoleFilter] = useState("")
-  const [statusFilter, setStatusFilter] = useState("")
-  const [showAddAdminModal, setShowAddAdminModal] = useState(false)
-  const [showAssignReviewerModal, setShowAssignReviewerModal] = useState(false)
-  // Remove the unused selectedUser state
-  // const [selectedUser, setSelectedUser] = useState(null)
-  const [formData, setFormData] = useState({
-    username: "",
-    email: "",
-    password: "",
-    phone: "",
-  })
-  const [selectedReviewer, setSelectedReviewer] = useState("")
+// Replace the Label import with a simple label component
+const Label = ({ htmlFor, children }) => (
+  <label 
+    htmlFor={htmlFor} 
+    className="text-sm font-medium leading-none mb-2 block"
+  >
+    {children}
+  </label>
+)
+
+export default function Users() {
+  const [searchTerm, setSearchTerm] = useState("")
   const [activeTab, setActiveTab] = useState("all")
-  const [useSimpleView, setUseSimpleView] = useState(false) // Toggle between views
-  // Add these states for the search functionality
-  const [searchQuery, setSearchQuery] = useState("")
-  const [searchResults, setSearchResults] = useState([])
-  const [isSearching, setIsSearching] = useState(false)
-
-  // Add this function at the top of your component
-  const openDeleteConfirmation = (user) => {
-    if (window.confirm(`Are you sure you want to delete user ${user.username || user.email}? This action cannot be undone.`)) {
-      deleteUserMutation.mutate(user._id);
-    }
-  };
-
-  // Add a function to search for users
-  const searchUsers = async () => {
-    if (!searchQuery.trim()) return
-    
-    setIsSearching(true)
-    try {
-      const response = await api.get(`/users/search?query=${encodeURIComponent(searchQuery)}`)
-      // Filter out users who are already reviewers or admins
-      const filteredResults = response.data.filter(
-        user => user.role !== "LegalReviewer" && user.role !== "Admin"
-      )
-      setSearchResults(filteredResults)
-    } catch (error) {
-      console.error("Failed to search users:", error)
-      handleApiError(error, setError)
-    } finally {
-      setIsSearching(false)
-    }
-  }
-
-  // Fetch users - Fix the endpoint and data handling
-  const { data: users, isLoading: isLoadingUsers } = useQuery({
-    queryKey: ['users', roleFilter, statusFilter],
+  const [showAddAdminDialog, setShowAddAdminDialog] = useState(false)
+  const [showLicenseDialog, setShowLicenseDialog] = useState(false)
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false)
+  const [showAssignReviewerDialog, setShowAssignReviewerDialog] = useState(false)
+  const [reviewerSearchTerm, setReviewerSearchTerm] = useState("")
+  const [selectedLawyer, setSelectedLawyer] = useState(null)
+  const [userToDelete, setUserToDelete] = useState(null)
+  const [userToAssign, setUserToAssign] = useState(null)
+  const [newAdmin, setNewAdmin] = useState({ username: "", email: "", password: "" })
+  const [assignSuccess, setAssignSuccess] = useState(null)
+  
+  const queryClient = useQueryClient()
+  
+  // Fetch all users
+  const { data: usersData, isLoading: isLoadingUsers, error: usersError } = useQuery({
+    queryKey: ['users'],
     queryFn: async () => {
-      try {
-        let url = "/users"
-        if (roleFilter || statusFilter) {
-          url += "/filter"
-          const params = {}
-          if (roleFilter) params.role = roleFilter
-          if (statusFilter) params.status = statusFilter
-          url += "?" + new URLSearchParams(params).toString()
-        }
-        
-        console.log("Fetching users from:", url)
-        const response = await api.get(url)
-        console.log("Users API response:", response.data)
-        
-        // Handle different response structures
-        if (response.data && Array.isArray(response.data.users)) {
-          return response.data.users
-        } else if (Array.isArray(response.data)) {
-          return response.data
-        // eslint-disable-next-line no-dupe-else-if
-        } else if (response.data && response.data.message && Array.isArray(response.data.users)) {
-          return response.data.users
-        }
-        
-        console.warn("Unexpected users data format:", response.data)
-        return []
-      } catch (error) {
-        console.error("Failed to fetch users:", error)
-        handleApiError(error, setError)
-        return [] // Return empty array instead of throwing
-      }
-    },
+      const response = await api.get("/users")
+      console.log("API Response (all users):", response.data)
+      return response.data || []
+    }
   })
 
-  // Fetch pending lawyers - Fix the endpoint and data handling
-  const { data: pendingLawyers, isLoading: isLoadingPendingLawyers } = useQuery({
-    queryKey: ['pendingLawyers'],
+  // Fetch pending lawyers specifically
+  const { data: pendingLawyersData, isLoading: isLoadingPending, error: pendingError } = useQuery({
+    queryKey: ['pending-lawyers'],
     queryFn: async () => {
-      try {
-        console.log("Fetching pending lawyers")
-        const response = await api.get("/users/pending-lawyers")
-        console.log("Pending lawyers API response:", response.data)
-        
-        // Handle different response structures
-        if (response.data && Array.isArray(response.data.pendingLawyers)) {
-          return response.data.pendingLawyers
-        } else if (Array.isArray(response.data)) {
-          return response.data
-        } else if (response.data && response.data.message && Array.isArray(response.data.pendingLawyers)) {
-          return response.data.pendingLawyers
-        }
-        
-        console.warn("Unexpected pending lawyers data format:", response.data)
-        return []
-      } catch (error) {
-        console.error("Failed to fetch pending lawyers:", error)
-        handleApiError(error, setError)
-        return [] // Return empty array instead of throwing
-      }
-    },
-    enabled: activeTab === "pending",
+      const response = await api.get("/users/pending-lawyers")
+      console.log("API Response (pending lawyers):", response.data)
+      return response.data.pendingLawyers || []
+    }
   })
 
+  // Ensure users is always an array before rendering
+  const users = Array.isArray(usersData) ? usersData : 
+               (usersData && Array.isArray(usersData.users)) ? usersData.users : [];
+  
+  // Get pending lawyers from the dedicated endpoint
+  const pendingLawyers = pendingLawyersData || [];
+  
+  console.log("Users data:", users)
+  console.log("Pending lawyers:", pendingLawyers)
+  
   // Add admin mutation
   const addAdminMutation = useMutation({
-    mutationFn: async (data) => {
-      const response = await api.post("/users/add-admin", data)
-      return response.data
+    mutationFn: async (adminData) => {
+      return await api.post("/users/add-admin", adminData)
     },
     onSuccess: () => {
       toast.success("Admin added successfully")
-      setShowAddAdminModal(false)
-      setFormData({
-        username: "",
-        email: "",
-        password: "",
-        phone: "",
-      })
-      queryClient.invalidateQueries({ queryKey: ['users'] })
+      setShowAddAdminDialog(false)
+      setNewAdmin({ username: "", email: "", password: "" })
+      queryClient.invalidateQueries(['users'])
     },
     onError: (error) => {
-      handleApiError(error, setError)
-    },
+      toast.error(`Failed to add admin: ${error.response?.data?.message || error.message}`)
+    }
   })
-
-  // Assign reviewer mutation
-  const assignReviewerMutation = useMutation({
-    mutationFn: async (userId) => {
-      const response = await api.post("/users/assign-reviewer", { userId })
-      return response.data
-    },
-    onSuccess: () => {
-      toast.success("User assigned as Legal Reviewer successfully")
-      setShowAssignReviewerModal(false)
-      setSearchQuery("")
-      setSearchResults([])
-      queryClient.invalidateQueries({ queryKey: ['users'] })
-    },
-    onError: (error) => {
-      handleApiError(error, setError)
-    },
-  })
-
+  
   // Delete user mutation
   const deleteUserMutation = useMutation({
     mutationFn: async (userId) => {
-      const response = await api.delete(`/users/${userId}`)
-      return response.data
+      return await api.delete(`/users/${userId}`)
     },
     onSuccess: () => {
       toast.success("User deleted successfully")
-      queryClient.invalidateQueries({ queryKey: ['users'] })
-      queryClient.invalidateQueries({ queryKey: ['pendingLawyers'] })
+      setShowDeleteDialog(false)
+      setUserToDelete(null)
+      queryClient.invalidateQueries(['users'])
     },
     onError: (error) => {
-      handleApiError(error, setError)
-    },
+      toast.error(`Failed to delete user: ${error.response?.data?.message || error.message}`)
+    }
   })
-
-  const handleInputChange = (e) => {
-    const { name, value } = e.target
-    setFormData((prev) => ({
-      ...prev,
-      [name]: value,
-    }))
+  
+  // Approve lawyer mutation
+  const approveLawyerMutation = useMutation({
+    mutationFn: async (lawyerId) => {
+      return await api.put(`/users/approve-lawyer`, { lawyerId })
+    },
+    onSuccess: () => {
+      toast.success("Lawyer approved successfully")
+      queryClient.invalidateQueries(['users'])
+    },
+    onError: (error) => {
+      toast.error(`Failed to approve lawyer: ${error.response?.data?.message || error.message}`)
+    }
+  })
+  
+  // Reject lawyer mutation
+  const rejectLawyerMutation = useMutation({
+    mutationFn: async (lawyerId) => {
+      return await api.put(`/users/reject-lawyer`, { lawyerId })
+    },
+    onSuccess: () => {
+      toast.success("Lawyer rejected")
+      queryClient.invalidateQueries(['users'])
+    },
+    onError: (error) => {
+      toast.error(`Failed to reject lawyer: ${error.response?.data?.message || error.message}`)
+    }
+  })
+  
+  // Assign reviewer mutation
+  const assignReviewerMutation = useMutation({
+    mutationFn: async (userId) => {
+      try {
+        const response = await api.post(`/users/assign-reviewer`, { userId });
+        return response.data;
+      } catch (error) {
+        if (error.response?.data?.message?.includes("already a Legal Reviewer")) {
+          throw new Error("User is already a Legal Reviewer");
+        }
+        throw error;
+      }
+    },
+    onSuccess: (data, variables) => {
+      // Find the user that was assigned
+      const assignedUser = users.find(user => user._id === variables);
+      const username = assignedUser ? assignedUser.username : "User";
+      
+      // Set success message with username
+      setAssignSuccess(`${username} was successfully assigned as a Legal Reviewer!`);
+      
+      // Show toast
+      toast.success(`${username} assigned as Legal Reviewer successfully!`, {
+        toastId: `assign-success-${Date.now()}`
+      });
+      
+      // Close dialog and reset state after a delay
+      setTimeout(() => {
+        setShowAssignReviewerDialog(false);
+        setUserToAssign(null);
+        
+        // Clear success message after dialog closes
+        setTimeout(() => {
+          setAssignSuccess(null);
+        }, 500);
+      }, 1500);
+      
+      // Refresh data
+      queryClient.invalidateQueries(['users']);
+      queryClient.invalidateQueries(['pending-lawyers']);
+    },
+    onError: (error) => {
+      toast.error(`${error.message}`, {
+        toastId: `assign-error-${Date.now()}`
+      });
+    }
+  })
+  
+  // Handle add admin
+  const handleAddAdmin = () => {
+    if (!newAdmin.username || !newAdmin.email || !newAdmin.password) {
+      toast.error("Please fill all fields")
+      return
+    }
+    
+    addAdminMutation.mutate(newAdmin)
   }
-
-  const handleAddAdmin = (e) => {
-    e.preventDefault()
-    addAdminMutation.mutate(formData)
+  
+  // Open delete confirmation dialog
+  const openDeleteDialog = (user) => {
+    setUserToDelete(user)
+    setShowDeleteDialog(true)
   }
-
-  const handleAssignReviewer = (userId) => {
-    if (userId) {
-      assignReviewerMutation.mutate(userId)
+  
+  // Handle delete user
+  const handleDeleteUser = () => {
+    if (userToDelete && userToDelete._id) {
+      deleteUserMutation.mutate(userToDelete._id)
     }
   }
+  
+  // Handle approve lawyer
+  const handleApproveLawyer = (lawyerId) => {
+    approveLawyerMutation.mutate(lawyerId)
+  }
+  
+  // Handle reject lawyer
+  const handleRejectLawyer = (lawyerId) => {
+    rejectLawyerMutation.mutate(lawyerId)
+  }
+  
+  // Handle assign reviewer with optimistic update
+  const handleAssignReviewer = (userId) => {
+    // Optimistic update - update UI immediately
+    const userToUpdate = users.find(user => user._id === userId);
+    if (userToUpdate) {
+      // Create a copy of users with the updated role
+      const updatedUsers = users.map(user => 
+        user._id === userId ? {...user, role: "LegalReviewer"} : user
+      );
+      
+      // Update the UI immediately
+      queryClient.setQueryData(['users'], updatedUsers);
+    }
+    
+    // Trigger the mutation
+    assignReviewerMutation.mutate(userId);
+  }
+  
+  // Handle view license
+  const handleViewLicense = (lawyer) => {
+    setSelectedLawyer(lawyer)
+    setShowLicenseDialog(true)
+  }
 
-  // Remove the unused handleDeleteUser function since we're using openDeleteConfirmation directly
-  // const handleDeleteUser = () => {
-  //   if (selectedUser) {
-  //     deleteUserMutation.mutate(selectedUser._id)
-  //   }
-  // }
+  if (isLoadingUsers || isLoadingPending) {
+    return <div className="flex justify-center items-center h-64">Loading...</div>
+  }
+  
+  if (usersError || pendingError) {
+    return <div className="flex justify-center items-center h-64 text-red-500">
+      Error: {usersError?.message || pendingError?.message}
+    </div>
+  }
 
-  // Table columns
-  const columns = useMemo(
-    () => [
-      {
-        accessorKey: "_id",
-        header: "ID",
-        cell: ({ row }) => <span className="text-xs">{row.original._id}</span>,
-      },
-      {
-        accessorKey: "username",
-        header: "Username",
-      },
-      {
-        accessorKey: "email",
-        header: "Email",
-      },
-      {
-        accessorKey: "role",
-        header: "Role",
-        cell: ({ row }) => (
-          <span
-            className={`px-2 py-1 text-xs font-medium rounded-full ${
-              row.original.role === "Admin"
-                ? "bg-purple-100 text-purple-800"
-                : row.original.role === "Lawyer"
-                  ? "bg-blue-100 text-blue-800"
-                  : row.original.role === "LegalReviewer"
-                    ? "bg-green-100 text-green-800"
-                    : "bg-gray-100 text-gray-800"
-            }`}
-          >
-            {row.original.role}
-          </span>
-        ),
-      },
-      {
-        accessorKey: "status",
-        header: "Status",
-        cell: ({ row }) => (
-          <span
-            className={`px-2 py-1 text-xs font-medium rounded-full ${
-              row.original.status === "Active"
-                ? "bg-green-100 text-green-800"
-                : row.original.status === "Pending"
-                  ? "bg-yellow-100 text-yellow-800"
-                  : row.original.status === "Suspended"
-                    ? "bg-red-100 text-red-800"
-                    : "bg-gray-100 text-gray-800"
-            }`}
-          >
-            {row.original.status}
-          </span>
-        ),
-      },
-      {
-        accessorKey: "actions",
-        header: "Actions",
-        cell: ({ row }) => (
-          <div className="flex space-x-2">
-            <button
-              onClick={() => openDeleteConfirmation(row.original)}
-              className="text-red-600 hover:text-red-900"
-              disabled={deleteUserMutation.isLoading}
-            >
-              <Trash2 className="h-5 w-5" />
-            </button>
-            {row.original.role !== "Admin" && row.original.role !== "LegalReviewer" && (
-              <button
-                onClick={() => {
-                  setSelectedReviewer(row.original._id)
-                  setShowAssignReviewerModal(true)
-                }}
-                className="text-green-600 hover:text-green-800"
-                aria-label="Assign as reviewer"
-              >
-                <Shield className="h-5 w-5" />
-              </button>
-            )}
-          </div>
-        ),
-      },
-    ],
-    [deleteUserMutation.isLoading]
-  )
+  // Get pending lawyers count
+  const pendingLawyersCount = pendingLawyers.length;
+
+  // Now users is guaranteed to be an array
+  const filteredUsers = activeTab === "pending" 
+    ? pendingLawyers.filter(lawyer => 
+        lawyer.username?.toLowerCase().includes(searchTerm.toLowerCase()) || 
+        lawyer.email?.toLowerCase().includes(searchTerm.toLowerCase())
+      )
+    : users.filter(user => {
+        const matchesSearch = user.username?.toLowerCase().includes(searchTerm.toLowerCase()) || 
+                             user.email?.toLowerCase().includes(searchTerm.toLowerCase())
+        
+        if (activeTab === "all") return matchesSearch
+        if (activeTab === "clients") return matchesSearch && user.role === "Client"
+        if (activeTab === "lawyers") return matchesSearch && user.role === "Lawyer"
+        if (activeTab === "admins") return matchesSearch && user.role === "Admin"
+        if (activeTab === "reviewers") return matchesSearch && user.role === "LegalReviewer"
+        return matchesSearch
+      });
 
   return (
-    <div className="bg-gray-50 min-h-screen p-4">
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-6">
-        <h2 className="text-2xl font-bold text-gray-800">User Management</h2>
-        <div className="flex items-center space-x-4">
-          <button
-            onClick={() => setUseSimpleView(!useSimpleView)}
-            className="px-4 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
+    <div className="space-y-6 p-4 sm:p-6 max-w-full overflow-hidden">
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6">
+        <h1 className="text-3xl font-bold tracking-tight">Users</h1>
+        
+        <div className="flex flex-col sm:flex-row gap-4">
+          <Button 
+            onClick={() => setShowAddAdminDialog(true)}
+            className="bg-indigo-600 hover:bg-indigo-700"
           >
-            {useSimpleView ? "Switch to Advanced View" : "Switch to Simple View"}
-          </button>
-          <button
-            onClick={() => setShowAddAdminModal(true)}
-            className="flex items-center px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-          >
-            <UserPlus className="h-5 w-5 mr-2" />
+            <UserPlus className="h-4 w-4 mr-2" />
             Add Admin
-          </button>
+          </Button>
+          
+          <Button 
+            onClick={() => setShowAssignReviewerDialog(true)}
+            className="bg-amber-600 hover:bg-amber-700"
+          >
+            <Shield className="h-4 w-4 mr-2" />
+            Assign Reviewer
+          </Button>
+          
+          <div className="relative w-full">
+            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+            <Input
+              type="search"
+              placeholder="Search users..."
+              className="pl-8 w-full"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+            />
+          </div>
         </div>
       </div>
-
-      {error && <ErrorAlert message={error} onClose={() => setError("")} />}
-
-      {/* Tabs */}
-      <div className="mb-6 border-b border-gray-200">
-        <nav className="-mb-px flex space-x-8">
-          <button
-            onClick={() => setActiveTab("all")}
-            className={`pb-4 px-1 border-b-2 font-medium text-sm ${
-              activeTab === "all"
-                ? "border-indigo-500 text-indigo-600"
-                : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
-            }`}
-          >
-            All Users
-          </button>
-          <button
-            onClick={() => setActiveTab("pending")}
-            className={`pb-4 px-1 border-b-2 font-medium text-sm ${
-              activeTab === "pending"
-                ? "border-indigo-500 text-indigo-600"
-                : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
-            }`} 
-          >
-            Pending Lawyers
-          </button>
-        </nav>
-      </div>
-
-      {activeTab === "all" && (
-        <>
-          {/* Toggle between SimpleUserList and the existing complex view */}
-          {useSimpleView ? (
-            <SimpleUserList />
+      
+      <Card className="overflow-hidden">
+        <CardHeader className="px-4 sm:px-6">
+          <CardTitle>User Management</CardTitle>
+        </CardHeader>
+        <CardContent className="p-0">
+          <Tabs defaultValue="all" value={activeTab} onValueChange={setActiveTab}>
+            <div className="px-4 sm:px-6 overflow-x-auto">
+              <TabsList className="mb-4 w-full overflow-x-auto flex-nowrap">
+                <TabsTrigger value="all">All Users</TabsTrigger>
+                <TabsTrigger value="clients">Clients</TabsTrigger>
+                <TabsTrigger value="lawyers">Lawyers</TabsTrigger>
+                <TabsTrigger value="admins">Admins</TabsTrigger>
+                <TabsTrigger value="reviewers">Legal Reviewers</TabsTrigger>
+                <TabsTrigger value="pending" className="relative">
+                  Pending Lawyers
+                  {pendingLawyersCount > 0 && (
+                    <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
+                      {pendingLawyersCount}
+                    </span>
+                  )}
+                </TabsTrigger>
+              </TabsList>
+            </div>
+            
+            <TabsContent value={activeTab} className="overflow-x-auto">
+              <div className="min-w-full">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="w-[200px]">Username</TableHead>
+                      <TableHead className="w-[250px]">Email</TableHead>
+                      <TableHead className="w-[120px]">Role</TableHead>
+                      <TableHead className="w-[120px]">Status</TableHead>
+                      <TableHead className="text-right w-[180px]">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {filteredUsers.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={5} className="text-center py-8">
+                          {activeTab === "pending" ? (
+                            <div className="flex flex-col items-center text-gray-500">
+                              <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12 mb-2 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                              </svg>
+                              <p className="text-lg font-medium">No pending lawyers</p>
+                              <p className="text-sm">All lawyer applications have been reviewed</p>
+                            </div>
+                          ) : (
+                            "No users found"
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      filteredUsers.map((user) => (
+                        <TableRow 
+                          key={user._id}
+                          className={user.role === "Lawyer" && user.status === "pending" ? "bg-amber-50" : ""}
+                        >
+                          <TableCell className="font-medium">{user.username}</TableCell>
+                          <TableCell>{user.email}</TableCell>
+                          <TableCell>
+                            <Badge variant={
+                              user.role === "Admin" ? "destructive" : 
+                              user.role === "Lawyer" ? "default" : 
+                              user.role === "LegalReviewer" ? "warning" :
+                              "secondary"
+                            }>
+                              {user.role}
+                            </Badge>
+                          </TableCell>
+                          <TableCell>
+                            {activeTab === "pending" || (user.role === "Lawyer" && user.status === "pending") ? (
+                              <Badge variant="outline" className="bg-yellow-50 text-yellow-700 border-yellow-200">
+                                Pending Approval
+                              </Badge>
+                            ) : (
+                              <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
+                                Active
+                              </Badge>
+                            )}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <div className="flex justify-end gap-2">
+                              {user.role === "Lawyer" && user.status === "pending" && (
+                                <>
+                                  <Button 
+                                    size="sm" 
+                                    variant="outline" 
+                                    className="h-8 w-8 p-0 bg-green-50 border-green-200 text-green-700 hover:bg-green-100 hover:text-green-800"
+                                    onClick={() => handleApproveLawyer(user._id)}
+                                    title="Approve Lawyer"
+                                  >
+                                    <UserCheck className="h-4 w-4" />
+                                  </Button>
+                                  <Button 
+                                    size="sm" 
+                                    variant="outline" 
+                                    className="h-8 w-8 p-0 bg-red-50 border-red-200 text-red-700 hover:bg-red-100 hover:text-red-800"
+                                    onClick={() => handleRejectLawyer(user._id)}
+                                    title="Reject Lawyer"
+                                  >
+                                    <UserX className="h-4 w-4" />
+                                  </Button>
+                                  <Button 
+                                    size="sm" 
+                                    variant="outline" 
+                                    className="h-8 w-8 p-0"
+                                    onClick={() => handleViewLicense(user)}
+                                    title="View License"
+                                  >
+                                    <FileText className="h-4 w-4" />
+                                  </Button>
+                                </>
+                              )}
+                              
+                              {/* Delete user button - don't allow deleting own account */}
+                              {user.role !== "Admin" && (
+                                <Button 
+                                  size="sm" 
+                                  variant="outline" 
+                                  className="h-8 w-8 p-0 text-destructive"
+                                  onClick={() => openDeleteDialog(user)}
+                                  title="Delete User"
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              )}
+                              
+                              <Button size="sm" variant="outline" className="h-8">
+                                View
+                              </Button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    )}
+                  </TableBody>
+                </Table>
+              </div>
+            </TabsContent>
+          </Tabs>
+        </CardContent>
+      </Card>
+      
+      {/* Add Admin Dialog */}
+      <Dialog open={showAddAdminDialog} onOpenChange={setShowAddAdminDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Add New Admin</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="username">Username</Label>
+              <Input 
+                id="username" 
+                value={newAdmin.username}
+                onChange={(e) => setNewAdmin({...newAdmin, username: e.target.value})}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="email">Email</Label>
+              <Input 
+                id="email" 
+                type="email"
+                value={newAdmin.email}
+                onChange={(e) => setNewAdmin({...newAdmin, email: e.target.value})}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="password">Password</Label>
+              <Input 
+                id="password" 
+                type="password"
+                value={newAdmin.password}
+                onChange={(e) => setNewAdmin({...newAdmin, password: e.target.value})}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowAddAdminDialog(false)}>Cancel</Button>
+            <Button onClick={handleAddAdmin} disabled={addAdminMutation.isLoading}>
+              {addAdminMutation.isLoading ? "Adding..." : "Add Admin"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      
+      {/* View License Dialog */}
+      <Dialog open={showLicenseDialog} onOpenChange={setShowLicenseDialog}>
+        <DialogContent className="max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>Lawyer License - {selectedLawyer?.username}</DialogTitle>
+          </DialogHeader>
+          <div className="py-4">
+            {selectedLawyer?.license_file ? (
+              <div className="border rounded-md p-4">
+                <iframe 
+                  src={`data:application/pdf;base64,${selectedLawyer.license_file}`} 
+                  className="w-full h-96"
+                  title="License Document"
+                />
+              </div>
+            ) : (
+              <div className="text-center text-gray-500 py-8">
+                No license file available
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowLicenseDialog(false)}>Close</Button>
+            <Button 
+              onClick={() => {
+                handleApproveLawyer(selectedLawyer._id);
+                setShowLicenseDialog(false);
+              }}
+              className="bg-green-600 hover:bg-green-700"
+            >
+              Approve Lawyer
+            </Button>
+            <Button 
+              onClick={() => {
+                handleRejectLawyer(selectedLawyer._id);
+                setShowLicenseDialog(false);
+              }}
+              variant="destructive"
+            >
+              Reject Lawyer
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      
+      {/* Delete Confirmation Dialog */}
+      {showDeleteDialog && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-xl w-full max-w-md p-6 relative">
+            <div className="flex items-center mb-4">
+              <AlertTriangle className="h-5 w-5 mr-2 text-red-500" />
+              <h2 className="text-xl font-semibold">Confirm Deletion</h2>
+            </div>
+            
+            <p className="mb-6 text-gray-600">
+              Are you sure you want to delete user <span className="font-semibold">{userToDelete?.username}</span>? This action cannot be undone.
+            </p>
+            
+            <div className="flex justify-end space-x-3">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setShowDeleteDialog(false)}
+                disabled={deleteUserMutation.isLoading}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                variant="destructive"
+                onClick={handleDeleteUser}
+                disabled={deleteUserMutation.isLoading}
+              >
+                {deleteUserMutation.isLoading ? (
+                  <span className="flex items-center">
+                    <svg
+                      className="animate-spin -ml-1 mr-2 h-4 w-4 text-white"
+                      xmlns="http://www.w3.org/2000/svg"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                    >
+                      <circle
+                        className="opacity-25"
+                        cx="12"
+                        cy="12"
+                        r="10"
+                        stroke="currentColor"
+                        strokeWidth="4"
+                      ></circle>
+                      <path
+                        className="opacity-75"
+                        fill="currentColor"
+                        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                      ></path>
+                    </svg>
+                    Deleting...
+                  </span>
+                ) : (
+                  "Delete User"
+                )}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {/* Assign Reviewer Dialog */}
+      <Dialog open={showAssignReviewerDialog} onOpenChange={(open) => {
+        if (!open) {
+          setUserToAssign(null);
+          setAssignSuccess(null);
+        }
+        setShowAssignReviewerDialog(open);
+      }}>
+        <DialogContent className="w-full max-w-3xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center">
+              <Shield className="h-5 w-5 mr-2 text-amber-500" />
+              Assign Legal Reviewer
+            </DialogTitle>
+          </DialogHeader>
+          
+          {assignSuccess ? (
+            <div className="py-8 text-center">
+              <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-green-100 mb-4">
+                <svg className="h-6 w-6 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
+              </div>
+              <h3 className="text-lg font-medium text-gray-900 mb-2">Success!</h3>
+              <p className="text-gray-600">{assignSuccess}</p>
+              <div className="mt-6">
+                <Button 
+                  onClick={() => {
+                    setShowAssignReviewerDialog(false);
+                    setAssignSuccess(null);
+                  }}
+                  className="w-full sm:w-auto"
+                >
+                  Close
+                </Button>
+              </div>
+            </div>
+          ) : userToAssign ? (
+            <>
+              <div className="py-4">
+                <p className="text-gray-600">
+                  Are you sure you want to assign <span className="font-semibold">{userToAssign.username}</span> as a Legal Reviewer? 
+                  They will have special permissions to review and approve legal documents.
+                </p>
+              </div>
+              <DialogFooter className="flex-col sm:flex-row gap-2">
+                <Button variant="outline" onClick={() => setUserToAssign(null)} className="w-full sm:w-auto">
+                  Back to Search
+                </Button>
+                <Button 
+                  onClick={() => {
+                    handleAssignReviewer(userToAssign._id);
+                  }}
+                  disabled={assignReviewerMutation.isLoading}
+                  className="bg-amber-600 hover:bg-amber-700 w-full sm:w-auto"
+                >
+                  {assignReviewerMutation.isLoading ? (
+                    <span className="flex items-center">
+                      <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                      </svg>
+                      Assigning...
+                    </span>
+                  ) : "Assign as Reviewer"}
+                </Button>
+              </DialogFooter>
+            </>
           ) : (
             <>
-              {/* Existing filter controls */}
-              <div className="bg-white p-4 rounded-lg shadow mb-6">
-                <div className="flex flex-col md:flex-row gap-4">
-                  <div className="flex-1">
-                    <label htmlFor="roleFilter" className="block text-sm font-medium text-gray-700 mb-1">
-                      Filter by Role
-                    </label>
-                    <select
-                      id="roleFilter"
-                      value={roleFilter}
-                      onChange={(e) => setRoleFilter(e.target.value)}
-                      className="block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-                    >
-                      <option value="">All Roles</option>
-                      <option value="Admin">Admin</option>
-                      <option value="Lawyer">Lawyer</option>
-                      <option value="Client">Client</option>
-                      <option value="LegalReviewer">Legal Reviewer</option>
-                    </select>
+              <div className="py-4 space-y-4">
+                <div className="bg-amber-50 p-4 rounded-md flex items-start">
+                  <AlertTriangle className="h-5 w-5 text-amber-600 mt-0.5 mr-2 flex-shrink-0" />
+                  <div>
+                    <h3 className="font-medium text-amber-800">About Legal Reviewers</h3>
+                    <p className="text-sm text-amber-700">
+                      Legal Reviewers have special permissions to review and approve legal documents, 
+                      lawyer applications, and other sensitive content. Assign this role carefully.
+                    </p>
                   </div>
-                  <div className="flex-1">
-                    <label htmlFor="statusFilter" className="block text-sm font-medium text-gray-700 mb-1">
-                      Filter by Status
-                    </label>
-                    <select
-                      id="statusFilter"
-                      value={statusFilter}
-                      onChange={(e) => setStatusFilter(e.target.value)}
-                      className="block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-                    >
-                      <option value="">All Statuses</option>
-                      <option value="Active">Active</option>
-                      <option value="Pending">Pending</option>
-                      <option value="Suspended">Suspended</option>
-                    </select>
-                  </div>
-                  <div className="flex items-end">
-                    <button
-                      onClick={() => {
-                        setRoleFilter("")
-                        setStatusFilter("")
-                      }}
-                      className="px-4 py-2 bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
-                    >
-                      Reset Filters
-                    </button>
-                  </div>
+                </div>
+                
+                <div className="relative">
+                  <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    type="search"
+                    placeholder="Search users by username or email..."
+                    className="pl-8 w-full"
+                    value={reviewerSearchTerm}
+                    onChange={(e) => setReviewerSearchTerm(e.target.value)}
+                  />
+                </div>
+                
+                <div className="border rounded-md overflow-hidden overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Username</TableHead>
+                        <TableHead>Email</TableHead>
+                        <TableHead>Role</TableHead>
+                        <TableHead className="text-right">Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {users
+                        .filter(user => 
+                          (user.role !== "Admin" && user.role !== "LegalReviewer") &&
+                          (user.username?.toLowerCase().includes(reviewerSearchTerm.toLowerCase()) || 
+                           user.email?.toLowerCase().includes(reviewerSearchTerm.toLowerCase()))
+                        )
+                        .map((user) => (
+                          <TableRow key={user._id}>
+                            <TableCell className="font-medium">{user.username}</TableCell>
+                            <TableCell>{user.email}</TableCell>
+                            <TableCell>
+                              <Badge variant={
+                                user.role === "Lawyer" ? "default" : "secondary"
+                              }>
+                                {user.role}
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="text-right">
+                              <Button 
+                                size="sm"
+                                onClick={() => setUserToAssign(user)}
+                                className="bg-amber-600 hover:bg-amber-700"
+                              >
+                                <Shield className="h-4 w-4 mr-2" />
+                                Assign
+                              </Button>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      {users.filter(user => 
+                        (user.role !== "Admin" && user.role !== "LegalReviewer") &&
+                        (user.username?.toLowerCase().includes(reviewerSearchTerm.toLowerCase()) || 
+                         user.email?.toLowerCase().includes(reviewerSearchTerm.toLowerCase()))
+                      ).length === 0 && (
+                        <TableRow>
+                          <TableCell colSpan={4} className="text-center py-8 text-gray-500">
+                            {reviewerSearchTerm ? (
+                              <div>No users found matching "{reviewerSearchTerm}"</div>
+                            ) : (
+                              <div>Enter a username or email to find users to assign as reviewers</div>
+                            )}
+                          </TableCell>
+                        </TableRow>
+                      )}
+                    </TableBody>
+                  </Table>
                 </div>
               </div>
-
-              {/* Users Table */}
-              {isLoadingUsers ? (
-                <div className="text-center py-4">
-                  <p className="text-gray-500">Loading users...</p>
-                </div>
-              ) : users && users.length > 0 ? (
-                <DataTable columns={columns} data={users} filterPlaceholder="Search users..." />
-              ) : (
-                <div className="text-center py-4 bg-white shadow rounded-lg">
-                  <p className="text-gray-500 py-8">No users found. Try adjusting your filters.</p>
-                </div>
-              )}
+              
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setShowAssignReviewerDialog(false)} className="w-full sm:w-auto">
+                  Cancel
+                </Button>
+              </DialogFooter>
             </>
           )}
-        </>
-      )}
-
-      {activeTab === "pending" && (
-        <>
-          <h3 className="text-lg font-medium text-gray-900 mb-4">Pending Lawyer Approvals</h3>
-          {isLoadingPendingLawyers ? (
-            <div className="text-center py-4">
-              <p className="text-gray-500">Loading pending lawyers...</p>
-            </div>
-          ) : (
-            <DataTable columns={columns} data={pendingLawyers || []} filterPlaceholder="Search pending lawyers..." />
-          )}
-        </>
-      )}
-
-      {/* Add Admin Modal */}
-      <Modal isOpen={showAddAdminModal} onClose={() => setShowAddAdminModal(false)} title="Add New Admin">
-        <form onSubmit={handleAddAdmin}>
-          <div className="space-y-4">
-            <div>
-              <label htmlFor="username" className="block text-sm font-medium text-gray-700">
-                Username
-              </label>
-              <input
-                type="text"
-                id="username"
-                name="username"
-                value={formData.username}
-                onChange={handleInputChange}
-                required
-                className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-              />
-            </div>
-            <div>
-              <label htmlFor="email" className="block text-sm font-medium text-gray-700">
-                Email
-              </label>
-              <input
-                type="email"
-                id="email"
-                name="email"
-                value={formData.email}
-                onChange={handleInputChange}
-                required
-                className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-              />
-            </div>
-            <div>
-              <label htmlFor="password" className="block text-sm font-medium text-gray-700">
-                Password
-              </label>
-              <input
-                type="password"
-                id="password"
-                name="password"
-                value={formData.password}
-                onChange={handleInputChange}
-                required
-                className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-              />
-            </div>
-            <div>
-              <label htmlFor="phone" className="block text-sm font-medium text-gray-700">
-                Phone (optional)
-              </label>
-              <input
-                type="tel"
-                id="phone"
-                name="phone"
-                value={formData.phone}
-                onChange={handleInputChange}
-                className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-              />
-            </div>
-          </div>
-          <div className="mt-6 flex justify-end space-x-3">
-            <button
-              type="button"
-              onClick={() => setShowAddAdminModal(false)}
-              className="px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={addAdminMutation.isPending}
-              className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:bg-indigo-300 disabled:cursor-not-allowed"
-            >
-              {addAdminMutation.isPending ? "Adding..." : "Add Admin"}
-            </button>
-          </div>
-        </form>
-      </Modal>
-
-      {/* Assign Reviewer Modal */}
-      <Modal
-        isOpen={showAssignReviewerModal}
-        onClose={() => setShowAssignReviewerModal(false)}
-        title="Assign Legal Reviewer"
-      >
-        <div className="space-y-6">
-          <div>
-            <label htmlFor="search-user" className="block text-sm font-medium text-gray-700 mb-1">
-              Search User by Username or Email
-            </label>
-            <div className="flex space-x-2">
-              <input
-                type="text"
-                id="search-user"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Enter username or email"
-                className="block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-              />
-              <button
-                type="button"
-                onClick={searchUsers}
-                disabled={isSearching || !searchQuery.trim()}
-                className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:bg-indigo-300 disabled:cursor-not-allowed"
-              >
-                {isSearching ? "Searching..." : "Search"}
-              </button>
-            </div>
-          </div>
-          
-          {/* Search Results */}
-          {searchResults.length > 0 ? (
-            <div className="mt-4">
-              <h3 className="text-sm font-medium text-gray-700 mb-2">Search Results</h3>
-              <div className="border rounded-md overflow-hidden">
-                <table className="min-w-full divide-y divide-gray-200">
-                  <thead className="bg-gray-50">
-                    <tr>
-                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Username
-                      </th>
-                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Email
-                      </th>
-                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Role
-                      </th>
-                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Action
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody className="bg-white divide-y divide-gray-200">
-                    {searchResults.map((user) => (
-                      <tr key={user._id}>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                          {user.username}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                          {user.email}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <span className={`px-2 py-1 text-xs font-medium rounded-full ${
-                            user.role === "Lawyer"
-                              ? "bg-blue-100 text-blue-800"
-                              : user.role === "Client"
-                                ? "bg-green-100 text-green-800"
-                                : "bg-gray-100 text-gray-800"
-                          }`}>
-                            {user.role}
-                          </span>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                          <button
-                            onClick={() => handleAssignReviewer(user._id)}
-                            disabled={assignReviewerMutation.isPending}
-                            className="text-indigo-600 hover:text-indigo-900 font-medium"
-                          >
-                            Assign as Reviewer
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          ) : searchQuery && !isSearching ? (
-            <p className="text-sm text-gray-500 mt-2">No users found matching your search.</p>
-          ) : null}
-          
-          <div className="flex justify-end space-x-3 mt-6">
-            <button
-              type="button"
-              onClick={() => {
-                setShowAssignReviewerModal(false)
-                setSearchQuery("")
-                setSearchResults([])
-              }}
-              className="px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-            >
-              Cancel
-            </button>
-          </div>
-        </div>
-      </Modal>
+        </DialogContent>
+      </Dialog>
+      
+      {/* Toast container */}
+      <ToastContainer
+        position="top-right"
+        autoClose={5000}
+        hideProgressBar={false}
+        newestOnTop
+        closeOnClick
+        rtl={false}
+        pauseOnFocusLoss
+        draggable
+        pauseOnHover
+        theme="colored"
+        limit={3}
+      />
     </div>
   )
 }
-
-export default Users

@@ -89,14 +89,27 @@ const ProtectedRoute = ({ children, allowedRoles }) => {
 
 function AppRoutes() {
   const location = useLocation();
-  const authRoutes = [
-    "/login",
-    "/register",
-    "/forgot-password",
-    "/reset-password",
-  ];
-  const hideNavbarFooter = authRoutes.includes(location.pathname);
+  const authRoutes = ["/login", "/register", "/forgot-password", "/reset-password"];
+  const isAdminRoute = location.pathname.startsWith('/dashboard/admin');
+  const hideNavbarFooter = authRoutes.includes(location.pathname) || isAdminRoute;
 
+  // For admin routes, render without the standard layout
+  if (isAdminRoute) {
+    return (
+      <Routes>
+        <Route
+          path="/dashboard/admin/*"
+          element={
+            <ProtectedRoute allowedRoles={["Admin"]}>
+              <AdminDashboard />
+            </ProtectedRoute>
+          }
+        />
+      </Routes>
+    );
+  }
+
+  // For non-admin routes, use the standard layout with navbar and footer
   return (
     <div className="flex flex-col min-h-screen">
       {!hideNavbarFooter && <Navbar />}

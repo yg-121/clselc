@@ -1,693 +1,451 @@
-"use client"
-
-import { useState, useEffect } from "react"
-import { useQuery, useQueryClient } from "@tanstack/react-query"
-import { Pie, Bar, Line } from "react-chartjs-2"
+import { useQuery } from "@tanstack/react-query"
+import api from "../../services/api"
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "../../components/ui/card"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "../../components/ui/tabs"
 import { 
-  Chart as ChartJS, 
-  ArcElement, 
-  Tooltip, 
-  Legend, 
-  CategoryScale, 
-  LinearScale, 
-  BarElement, 
-  Title,
-  PointElement,
-  LineElement
-} from "chart.js"
-import { Clock, Users, UserCheck, Briefcase, FileText, Calendar, AlertTriangle } from "react-feather"
-import api from "../../utils/api"
-import ChartCard from "../../components/admin/ChartCard"
-import ErrorAlert from "../../components/admin/ErrorAlert"
-import { formatDate, formatDateTime } from "../../utils/formatters"
-import { Link } from "react-router-dom"
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, 
+  PieChart, Pie, Cell, LineChart, Line, Legend, AreaChart, Area 
+} from "recharts"
+import { 
+  Users, Briefcase, UserCheck, Clock, Activity, 
+  Calendar, TrendingUp, AlertCircle 
+} from "lucide-react"
 
-// Register ChartJS components
-ChartJS.register(
-  ArcElement, 
-  Tooltip, 
-  Legend, 
-  CategoryScale, 
-  LinearScale, 
-  BarElement, 
-  Title,
-  PointElement,
-  LineElement
-)
-
-const Dashboard = () => {
-  const [error, setError] = useState("")
-  const queryClient = useQueryClient()
-  const [mockAppointments, setMockAppointments] = useState([]);
-
-  // Add this helper function at the top of your component
-  const safeFormatDateTime = (dateTime) => {
-    try {
-      if (!dateTime) return "No date available";
-      
-      // Try to format using the formatDateTime function
-      return formatDateTime(dateTime);
-    } catch (error) {
-      console.error("Error formatting date:", error, "Date value:", dateTime);
-      
-      // Return a fallback format
-      try {
-        if (dateTime) {
-          const date = new Date(dateTime);
-          if (isNaN(date.getTime())) {
-            return "Invalid date";
-          }
-          return date.toLocaleString();
-        }
-      } catch (e) {
-        console.error("Fallback date formatting failed:", e);
-      }
-      
-      return "Invalid date";
-    }
-  };
-
-  // Add this function to check if the API endpoint is working
-  useEffect(() => {
-    const checkApiEndpoint = async () => {
-      try {
-        console.log("Testing admin stats endpoint...")
-        const token = localStorage.getItem("token")
-        const apiUrl = import.meta.env.VITE_API_URL || "http://localhost:5000/api"
-        
-        // Try different route combinations
-        const routes = [
-          "/notifications/admin/stats",
-        ]
-        
-        for (const route of routes) {
-          console.log(`Testing route: ${apiUrl}${route}`)
-          try {
-            const response = await fetch(`${apiUrl}${route}`, {
-              headers: {
-                Authorization: `Bearer ${token}`,
-                "Content-Type": "application/json"
-              }
-            })
-            
-            console.log(`Route ${route} status:`, response.status)
-            
-            if (response.ok) {
-              const data = await response.json()
-              console.log(`Route ${route} data:`, data)
-              console.log("Found working route!")
-              break
-            } else {
-              const errorText = await response.text()
-              console.error(`Route ${route} error:`, errorText)
-            }
-          } catch (routeError) {
-            console.error(`Route ${route} fetch error:`, routeError)
-          }
-        }
-      } catch (error) {
-        console.error("Direct fetch error:", error)
-      }
-    }
-    
-    checkApiEndpoint()
-  }, [])
-
-  // Fetch dashboard data - Fix the route to match backend
-  const { data: dashboardData, isLoading: isLoadingDashboard } = useQuery({
+export default function Dashboard() {
+  // Fetch admin stats with more detailed debugging
+  const { data: dashboardData, isLoading: isLoadingStats, error: statsError } = useQuery({
     queryKey: ['dashboardData'],
     queryFn: async () => {
       try {
-        console.log("Fetching dashboard stats...")
+        console.log("🔍 Fetching admin stats...")
         
-        // The correct route that matches your backend
-        // Your api client already includes the '/api' prefix
+        // Log the API URL being used
+        console.log("🔍 API URL:", api.defaults.baseURL || "No base URL set")
+        
+        // Make the API call with detailed logging
+        console.log("🔍 Making API call to /notifications/admin/stats")
         const response = await api.get("/notifications/admin/stats")
-        console.log("Dashboard stats response:", response.data)
         
-        // Return empty object if data is null or undefined
-        return response.data || { 
-          totalUsers: 0, 
-          pendingLawyers: 0, 
-          totalCases: 0 
-        }
+        // Log the full response
+        console.log("🔍 Admin stats response status:", response.status)
+        console.log("🔍 Admin stats response headers:", response.headers)
+        console.log("🔍 Admin stats response data:", response.data)
+        
+        return response.data
       } catch (error) {
-        console.error("Dashboard stats error:", error)
-        console.error("Error details:", error.response?.data || error.message)
-        setError("Failed to load dashboard data: " + (error.response?.data?.message || error.message))
-        
-        // Return default data as a last resort
-        return { 
-          totalUsers: 0, 
-          pendingLawyers: 0, 
-          totalCases: 0 
-        }
+        console.error("❌ Error fetching admin stats:", error)
+        console.error("❌ Error details:", error.response?.data || error.message)
+        throw error
       }
-    },
-    retry: 1,
-    retryDelay: 1000,
+    }
   })
 
-  // Fetch case analytics - Fix the endpoint and data structure
-  const { data: analyticsData, isLoading: isLoadingAnalytics } = useQuery({
+  // Fetch case analytics
+  const { data: caseAnalytics, isLoading: isLoadingAnalytics, error: analyticsError } = useQuery({
     queryKey: ['caseAnalytics'],
     queryFn: async () => {
       try {
+        console.log("Fetching case analytics...")
         const response = await api.get("/cases/analytics")
-        console.log("Analytics response:", response.data)
-        
-        // Extract the analytics data
-        const data = response.data.analytics || response.data;
-        
-        // Transform the byCategory object into an array format for the chart
-        const byCategory = data.byCategory ? 
-          Object.entries(data.byCategory).map(([category, count]) => ({ 
-            category, 
-            count 
-          })) : [];
-        
-        // Transform the byStatus object into an array format for the chart
-        const byStatus = data.byStatus ? 
-          Object.entries(data.byStatus).map(([status, count]) => ({ 
-            status, 
-            count 
-          })) : [];
-        
-        console.log("Transformed category data:", byCategory);
-        console.log("Transformed status data:", byStatus);
-        
-        return {
-          byCategory,
-          byStatus
-        };
+        console.log("Case analytics response:", response.data)
+        return response.data?.analytics || {}
       } catch (error) {
-        setError("Failed to load analytics: " + (error.response?.data?.message || error.message))
+        console.error("Error fetching case analytics:", error)
         throw error
       }
-    },
-  })
-
-  // Fetch recent audit logs
-  const { data: auditLogs, isLoading: isLoadingAudit } = useQuery({
-    queryKey: ['recentAuditLogs'],
-    queryFn: async () => {
-      try {
-        const response = await api.get("/audit?limit=5")
-        return response.data
-      } catch (error) {
-        setError("Failed to load audit logs: " + (error.response?.data?.message || error.message))
-        throw error
-      }
-    },
-  })
-
-  // Fetch upcoming appointments - Fix the endpoint and data structure
-  const { data: appointments, isLoading: isLoadingAppointments } = useQuery({
-    queryKey: ['upcomingAppointments'],
-    queryFn: async () => {
-      try {
-        // Use the correct endpoint without duplicating /api
-        const response = await api.get("/appointments?limit=5");
-        console.log("Appointments response:", response.data);
-        
-        // Handle different response structures
-        let appointmentsData = [];
-        
-        if (Array.isArray(response.data)) {
-          console.log("Response data is an array");
-          appointmentsData = response.data;
-        } else if (response.data && Array.isArray(response.data.appointments)) {
-          console.log("Response data has appointments array");
-          appointmentsData = response.data.appointments;
-        } else if (response.data && response.data.message === "Appointments fetched" && Array.isArray(response.data.appointments)) {
-          console.log("Response data has message and appointments array");
-          appointmentsData = response.data.appointments;
-        } else {
-          console.warn("Unexpected appointments data format:", response.data);
-          return [];
-        }
-        
-        console.log("Processed appointments data:", appointmentsData);
-        
-        // Transform the data to match the expected format
-        return appointmentsData.map(appointment => {
-          console.log("Processing appointment:", appointment);
-          return {
-            _id: appointment._id || `temp-${Math.random()}`,
-            clientName: appointment.client?.username || 
-                       (typeof appointment.client === 'string' ? appointment.client : 'Unknown Client'),
-            lawyerName: appointment.lawyer?.username || 
-                       (typeof appointment.lawyer === 'string' ? appointment.lawyer : 'Unknown Lawyer'),
-            dateTime: appointment.date || appointment.dateTime || new Date().toISOString(),
-            status: appointment.status || 'Scheduled',
-            type: appointment.type || 'Consultation'
-          };
-        });
-      } catch (error) {
-        console.error("Appointment fetch error:", error);
-        console.error("Error details:", error.response?.data || error.message);
-        return []; // Return empty array instead of throwing
-      }
-    },
-    retry: 2,
-    retryDelay: 1000,
-    staleTime: 60000,
-  })
-
-  // If no appointments are returned, use mock data for testing
-  useEffect(() => {
-    if (appointments && appointments.length === 0 && !isLoadingAppointments) {
-      console.log("No appointments returned from API, using mock data for testing");
-      // This is just for testing - remove in production
-      const mockAppointments = [
-        {
-          _id: "mock1",
-          clientName: "John Doe",
-          lawyerName: "Jane Smith",
-          dateTime: new Date(Date.now() + 86400000).toISOString(), // Tomorrow
-          status: "Scheduled",
-          type: "Consultation"
-        },
-        {
-          _id: "mock2",
-          clientName: "Alice Johnson",
-          lawyerName: "Bob Brown",
-          dateTime: new Date(Date.now() + 172800000).toISOString(), // Day after tomorrow
-          status: "Pending",
-          type: "Meeting"
-        }
-      ];
-      // Uncomment this line to use mock data for testing
-      // setMockAppointments(mockAppointments);
     }
-  }, [appointments, isLoadingAppointments]);
-
-  // Fetch notifications separately
-  const { data: notificationsData, isLoading: isLoadingNotifications } = useQuery({
-    queryKey: ['adminNotifications'],
-    queryFn: async () => {
-      try {
-        const response = await api.get("/notifications/admin/notifications")
-        console.log("Notifications response:", response.data)
-        return response.data.notifications || []
-      } catch (error) {
-        setError("Failed to load notifications: " + (error.response?.data?.message || error.message))
-        throw error
-      }
-    },
   })
 
-  // Prepare chart data - Fix potential NaN issues
-  const categoryChartData = {
-    labels: analyticsData?.byCategory?.map(item => item.category || 'Unknown') || [],
-    datasets: [
-      {
-        data: analyticsData?.byCategory?.map(item => Number(item.count) || 0) || [],
-        backgroundColor: [
-          "#4F46E5", // indigo-600
-          "#7C3AED", // purple-600
-          "#EC4899", // pink-600
-          "#F59E0B", // amber-500
-          "#10B981", // emerald-500
-          "#3B82F6", // blue-500
-          "#EF4444", // red-500
-        ],
-        borderWidth: 1,
-      },
-    ],
+  // Generate default activity data if none is provided by the backend
+  const generateDefaultActivityData = () => {
+    const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+    return days.map(day => ({
+      name: day,
+      users: 0,
+      cases: 0
+    }))
   }
 
-  const statusChartData = {
-    labels: analyticsData?.byStatus?.map(item => item.status || 'Unknown') || [],
-    datasets: [
-      {
-        label: "Cases by Status",
-        data: analyticsData?.byStatus?.map(item => Number(item.count) || 0) || [],
-        backgroundColor: "#4F46E5",
-      },
-    ],
+  // Show loading state
+  if (isLoadingStats || isLoadingAnalytics) {
+    return <div className="flex justify-center items-center h-64">Loading dashboard data...</div>
   }
 
-  const statusChartOptions = {
-    responsive: true,
-    plugins: {
-      legend: {
-        display: false,
-      },
-      title: {
-        display: false,
-      },
-    },
-    scales: {
-      y: {
-        beginAtZero: true,
-        ticks: {
-          precision: 0,
-        },
-      },
-    },
+  // Show error state
+  if (statsError || analyticsError) {
+    return (
+      <div className="flex flex-col items-center justify-center h-64 space-y-4">
+        <AlertCircle className="h-10 w-10 text-red-500" />
+        <h2 className="text-xl font-bold">Error Loading Dashboard</h2>
+        <p className="text-muted-foreground">
+          {statsError?.message || analyticsError?.message || "Failed to load dashboard data"}
+        </p>
+        <p className="text-sm text-muted-foreground">
+          Please check your backend connection and try again.
+        </p>
+      </div>
+    )
   }
 
-  // User activity chart data (mock data - replace with actual data when available)
-  const userActivityData = {
-    labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul'],
-    datasets: [
-      {
-        label: 'New Users',
-        data: [5, 8, 12, 7, 10, 15, 9],
-        borderColor: '#4F46E5',
-        backgroundColor: 'rgba(79, 70, 229, 0.1)',
-        tension: 0.4,
-        fill: true,
-      },
-      {
-        label: 'Active Users',
-        data: [15, 20, 18, 25, 22, 30, 28],
-        borderColor: '#10B981',
-        backgroundColor: 'rgba(16, 185, 129, 0.1)',
-        tension: 0.4,
-        fill: true,
-      }
-    ],
-  }
-
-  // Mark notification as read
-  const markAsRead = async (notificationId) => {
-    try {
-      await api.patch(`/notifications/${notificationId}/read`)
-      // Refetch notifications
-      await queryClient.invalidateQueries({ queryKey: ['adminNotifications'] })
-    } catch (error) {
-      setError("Failed to mark notification as read: " + (error.response?.data?.message || error.message))
-    }
-  }
-
-  // Try different API endpoints
-  useEffect(() => {
-    const checkEndpoints = async () => {
-      try {
-        console.log("Checking appointment endpoints...");
-        
-        try {
-          const response1 = await api.get("/appointments?limit=5");
-          console.log("Endpoint /appointments works:", response1.data);
-        } catch (e) {
-          console.log("Endpoint /appointments failed:", e.message);
-        }
-        
-        try {
-          // Remove the duplicate /api prefix
-          const response2 = await axios.get("http://localhost:5000/api/appointments?limit=5");
-          console.log("Direct endpoint /api/appointments works:", response2.data);
-        } catch (e) {
-          console.log("Direct endpoint /api/appointments failed:", e.message);
-        }
-      } catch (error) {
-        console.error("Endpoint check failed:", error);
-      }
-    };
-    
-    checkEndpoints();
-  }, []);
+  // Colors for charts
+  const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8', '#82ca9d']
+  
+  // Prepare data for pie charts
+  const caseStatusData = Object.entries(dashboardData?.casesByStatus || {}).map(([name, value]) => ({
+    name,
+    value
+  }))
+  
+  const caseCategoryData = Object.entries(dashboardData?.casesByCategory || {}).map(([name, value]) => ({
+    name,
+    value
+  }))
 
   return (
-    <div className="bg-gray-50 min-h-screen p-4">
-      <h2 className="text-2xl font-bold text-gray-800 mb-6">Dashboard Overview</h2>
-
-      {error && <ErrorAlert message={error} onClose={() => setError("")} />}
-
-      {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
-        <div className="bg-white shadow rounded-lg p-4 flex items-start">
-          <div className="p-3 rounded-full bg-indigo-100 text-indigo-600 mr-4">
-            <Users className="h-6 w-6" />
-          </div>
-          <div>
-            <p className="text-sm font-medium text-gray-500">Total Users</p>
-            <p className="text-2xl font-semibold text-gray-800">
-              {isLoadingDashboard ? "..." : dashboardData?.totalUsers || 0}
+    <div className="space-y-6">
+      <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
+      
+      {/* Stats Overview */}
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Total Users</CardTitle>
+            <Users className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{dashboardData?.totalUsers || 0}</div>
+            <p className="text-xs text-muted-foreground">
+              {dashboardData?.clients || 0} clients, {dashboardData?.lawyers || 0} lawyers
             </p>
-          </div>
-        </div>
-
-        <div className="bg-white shadow rounded-lg p-4 flex items-start">
-          <div className="p-3 rounded-full bg-green-100 text-green-600 mr-4">
-            <UserCheck className="h-6 w-6" />
-          </div>
-          <div>
-            <p className="text-sm font-medium text-gray-500">Lawyers</p>
-            <p className="text-2xl font-semibold text-gray-800">
-              {isLoadingDashboard ? "..." : dashboardData?.lawyers || 0}
+          </CardContent>
+        </Card>
+        
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Pending Lawyers</CardTitle>
+            <UserCheck className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{dashboardData?.pendingLawyers || 0}</div>
+            <p className="text-xs text-muted-foreground">
+              Lawyers awaiting approval
             </p>
-          </div>
-        </div>
-
-        <div className="bg-white shadow rounded-lg p-4 flex items-start">
-          <div className="p-3 rounded-full bg-yellow-100 text-yellow-600 mr-4">
-            <Clock className="h-6 w-6" />
-          </div>
-          <div>
-            <p className="text-sm font-medium text-gray-500">Pending Lawyers</p>
-            <p className="text-2xl font-semibold text-gray-800">
-              {isLoadingDashboard ? "..." : dashboardData?.pendingLawyers || 0}
+          </CardContent>
+        </Card>
+        
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Total Cases</CardTitle>
+            <Briefcase className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{dashboardData?.totalCases || 0}</div>
+            <p className="text-xs text-muted-foreground">
+              {dashboardData?.casesByStatus?.Posted || 0} posted, {dashboardData?.casesByStatus?.Assigned || 0} assigned
             </p>
-            {(dashboardData?.pendingLawyers > 0) && (
-              <Link to="/dashboard/admin/users?role=Lawyer&status=Pending" className="text-xs text-indigo-600 hover:text-indigo-800">
-                Review pending lawyers
-              </Link>
-            )}
-          </div>
-        </div>
-
-        <div className="bg-white shadow rounded-lg p-4 flex items-start">
-          <div className="p-3 rounded-full bg-blue-100 text-blue-600 mr-4">
-            <Briefcase className="h-6 w-6" />
-          </div>
-          <div>
-            <p className="text-sm font-medium text-gray-500">Total Cases</p>
-            <p className="text-2xl font-semibold text-gray-800">
-              {isLoadingDashboard ? "..." : dashboardData?.totalCases || 0}
+          </CardContent>
+        </Card>
+        
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Active Deadlines</CardTitle>
+            <Clock className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{caseAnalytics?.activeDeadlines || 0}</div>
+            <p className="text-xs text-muted-foreground">
+              Upcoming case deadlines
             </p>
-          </div>
-        </div>
+          </CardContent>
+        </Card>
       </div>
 
-      {/* Charts */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-        <ChartCard title="Cases by Category">
-          {isLoadingAnalytics ? (
-            <div className="h-64 flex items-center justify-center">
-              <p className="text-gray-500">Loading chart data...</p>
-            </div>
-          ) : analyticsData?.byCategory && analyticsData.byCategory.length > 0 ? (
-            <div className="h-64">
-              <Pie data={categoryChartData} />
-            </div>
-          ) : (
-            <div className="h-64 flex items-center justify-center">
-              <p className="text-gray-500">No category data available</p>
-            </div>
-          )}
-        </ChartCard>
-
-        <ChartCard title="Cases by Status">
-          {isLoadingAnalytics ? (
-            <div className="h-64 flex items-center justify-center">
-              <p className="text-gray-500">Loading chart data...</p>
-            </div>
-          ) : analyticsData?.byStatus && analyticsData.byStatus.length > 0 ? (
-            <div className="h-64">
-              <Bar data={statusChartData} options={statusChartOptions} />
-            </div>
-          ) : (
-            <div className="h-64 flex items-center justify-center">
-              <p className="text-gray-500">No status data available</p>
-            </div>
-          )}
-        </ChartCard>
-      </div>
-
-      {/* User Activity Chart */}
-      <div className="bg-white shadow rounded-lg p-4 mb-6">
-        <h3 className="text-lg font-medium text-gray-900 mb-4">User Activity</h3>
-        <div className="h-64">
-          <Line 
-            data={userActivityData} 
-            options={{
-              responsive: true,
-              plugins: {
-                legend: {
-                  position: 'top',
-                },
-              },
-              scales: {
-                y: {
-                  beginAtZero: true,
-                  ticks: {
-                    precision: 0,
-                  },
-                },
-              },
-            }}
-          />
-        </div>
-      </div>
-
-      {/* Recent Activity and Notifications */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-        {/* Recent Audit Logs */}
-        <div className="bg-white shadow rounded-lg p-4">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-medium text-gray-900">Recent Activity</h3>
-            <Link to="/dashboard/admin/audit" className="text-sm font-medium text-indigo-600 hover:text-indigo-500">
-              View all
-            </Link>
-          </div>
-
-          {isLoadingAudit ? (
-            <div className="py-4 text-center">
-              <p className="text-gray-500">Loading activity logs...</p>
-            </div>
-          ) : auditLogs?.length > 0 ? (
-            <ul className="divide-y divide-gray-200">
-              {auditLogs.slice(0, 5).map((log) => (
-                <li key={log._id} className="py-3">
-                  <div className="flex items-start">
-                    <div className="p-2 rounded-full bg-gray-100 text-gray-600 mr-3">
-                      <FileText className="h-4 w-4" />
-                    </div>
-                    <div>
-                      <p className="text-sm font-medium text-gray-900">
-                        {log.admin?.username || "System"} {log.action} {log.target?.username || ""}
-                      </p>
-                      <p className="text-xs text-gray-500 mt-1">
-                        {formatDate(log.createdAt)}
-                      </p>
-                    </div>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <div className="py-4 text-center">
-              <p className="text-gray-500">No activity logs available</p>
-            </div>
-          )}
-        </div>
-
-        {/* Recent Notifications */}
-        <div className="bg-white shadow rounded-lg p-4">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-medium text-gray-900">Recent Notifications</h3>
-            <Link to="/dashboard/admin/notifications" className="text-sm font-medium text-indigo-600 hover:text-indigo-500">
-              View all
-            </Link>
-          </div>
-
-          {isLoadingNotifications ? (
-            <div className="py-4 text-center">
-              <p className="text-gray-500">Loading notifications...</p>
-            </div>
-          ) : notificationsData?.length > 0 ? (
-            <ul className="divide-y divide-gray-200">
-              {notificationsData.slice(0, 5).map((notification) => (
-                <li key={notification._id} className="py-3">
-                  <div className="flex items-start justify-between">
-                    <div className="flex items-start">
-                      <div className={`p-2 rounded-full mr-3 ${
-                        notification.type === "new_user" 
-                          ? "bg-green-100 text-green-600" 
-                          : notification.type === "case_update" 
-                            ? "bg-blue-100 text-blue-600"
-                            : "bg-yellow-100 text-yellow-600"
-                      }`}>
-                        <AlertTriangle className="h-4 w-4" />
-                      </div>
-                      <div>
-                        <p className="text-sm font-medium text-gray-900">{notification.message}</p>
-                        <p className="text-xs text-gray-500 mt-1">
-                          {notification.type} • {formatDate(notification.createdAt)}
+      {/* Tabs for different analytics views */}
+      <Tabs defaultValue="overview" className="space-y-4">
+        <TabsList>
+          <TabsTrigger value="overview">Overview</TabsTrigger>
+          <TabsTrigger value="cases">Case Analytics</TabsTrigger>
+          <TabsTrigger value="users">User Analytics</TabsTrigger>
+        </TabsList>
+        
+        {/* Overview Tab */}
+        <TabsContent value="overview" className="space-y-4">
+          <div className="grid gap-4 md:grid-cols-2">
+            {/* Recent Activity Chart */}
+            <Card className="col-span-2">
+              <CardHeader>
+                <CardTitle>Platform Activity</CardTitle>
+                <CardDescription>User and case activity over time</CardDescription>
+              </CardHeader>
+              <CardContent className="h-80">
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={dashboardData.recentActivity || generateDefaultActivityData()}>
+                    <defs>
+                      <linearGradient id="colorUsers" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#8884d8" stopOpacity={0.8}/>
+                        <stop offset="95%" stopColor="#8884d8" stopOpacity={0}/>
+                      </linearGradient>
+                      <linearGradient id="colorCases" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#82ca9d" stopOpacity={0.8}/>
+                        <stop offset="95%" stopColor="#82ca9d" stopOpacity={0}/>
+                      </linearGradient>
+                    </defs>
+                    <XAxis dataKey="name" />
+                    <YAxis />
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <Tooltip />
+                    <Area type="monotone" dataKey="users" stroke="#8884d8" fillOpacity={1} fill="url(#colorUsers)" />
+                    <Area type="monotone" dataKey="cases" stroke="#82ca9d" fillOpacity={1} fill="url(#colorCases)" />
+                  </AreaChart>
+                </ResponsiveContainer>
+              </CardContent>
+            </Card>
+            
+            {/* Recent Cases */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Recent Cases</CardTitle>
+                <CardDescription>Latest cases on the platform</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  {(dashboardData.recentCases || []).map((caseItem, index) => (
+                    <div key={index} className="flex items-center">
+                      <div className={`w-2 h-2 rounded-full mr-2 ${
+                        caseItem.status === 'Closed' ? 'bg-green-500' : 
+                        caseItem.status === 'Assigned' ? 'bg-blue-500' : 'bg-yellow-500'
+                      }`} />
+                      <div className="flex-1 space-y-1">
+                        <p className="text-sm font-medium leading-none">
+                          {caseItem.description?.substring(0, 50) || `Case #${caseItem._id}`}
+                          {caseItem.description?.length > 50 ? '...' : ''}
+                        </p>
+                        <p className="text-sm text-muted-foreground">
+                          {caseItem.category} • {caseItem.status}
                         </p>
                       </div>
                     </div>
-                    {notification.status === "Unread" && (
-                      <button
-                        onClick={() => markAsRead(notification._id)}
-                        className="ml-4 px-3 py-1 text-xs font-medium text-indigo-600 bg-indigo-100 rounded-md hover:bg-indigo-200"
-                      >
-                        Mark as Read
-                      </button>
-                    )}
-                  </div>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <div className="py-4 text-center">
-              <p className="text-gray-500">No notifications available</p>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Upcoming Appointments */}
-      <div className="bg-white shadow rounded-lg p-4">
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="text-lg font-medium text-gray-900">Upcoming Appointments</h3>
-          <Link to="/dashboard/admin/appointments" className="text-sm font-medium text-indigo-600 hover:text-indigo-500">
-            View all
-          </Link>
-        </div>
-
-        {isLoadingAppointments ? (
-          <div className="py-4 text-center">
-            <p className="text-gray-500">Loading appointments...</p>
-          </div>
-        ) : (appointments && appointments.length > 0) || mockAppointments.length > 0 ? (
-          <ul className="divide-y divide-gray-200">
-            {(appointments?.length > 0 ? appointments : mockAppointments).slice(0, 5).map((appointment) => (
-              <li key={appointment._id} className="py-3">
-                <div className="flex items-start">
-                  <div className="p-2 rounded-full bg-indigo-100 text-indigo-600 mr-3">
-                    <Calendar className="h-4 w-4" />
-                  </div>
-                  <div className="flex-1">
-                    <div className="flex justify-between">
-                      <p className="text-sm font-medium text-gray-900">
-                        {String(appointment.clientName || 'Unknown Client')} with {String(appointment.lawyerName || 'Unknown Lawyer')}
-                      </p>
-                      <span className="text-xs font-medium px-2 py-1 rounded-full bg-green-100 text-green-800">
-                        {String(appointment.status || 'Scheduled')}
-                      </span>
-                    </div>
-                    <p className="text-xs text-gray-500 mt-1">
-                      {safeFormatDateTime(appointment.dateTime)}
-                    </p>
-                  </div>
+                  ))}
+                  
+                  {(!dashboardData.recentCases || dashboardData.recentCases.length === 0) && (
+                    <p className="text-sm text-muted-foreground">No recent cases</p>
+                  )}
                 </div>
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <div className="py-4 text-center">
-            <p className="text-gray-500">No upcoming appointments</p>
+              </CardContent>
+            </Card>
+            
+            {/* User Growth */}
+            <Card>
+              <CardHeader>
+                <CardTitle>User Growth</CardTitle>
+                <CardDescription>New user registrations over time</CardDescription>
+              </CardHeader>
+              <CardContent className="h-[300px]">
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={dashboardData.userGrowth || []}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="name" />
+                    <YAxis />
+                    <Tooltip />
+                    <Line 
+                      type="monotone" 
+                      dataKey="users" 
+                      stroke="#8884d8" 
+                      strokeWidth={2}
+                      activeDot={{ r: 8 }}
+                    />
+                  </LineChart>
+                </ResponsiveContainer>
+              </CardContent>
+            </Card>
           </div>
-        )}
-      </div>
+        </TabsContent>
+        
+        {/* Case Analytics Tab */}
+        <TabsContent value="cases" className="space-y-4">
+          <div className="grid gap-4 md:grid-cols-2">
+            {/* Cases by Status */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Cases by Status</CardTitle>
+                <CardDescription>Distribution of cases by current status</CardDescription>
+              </CardHeader>
+              <CardContent className="h-[300px]">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={caseStatusData}
+                      cx="50%"
+                      cy="50%"
+                      labelLine={false}
+                      label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
+                      outerRadius={80}
+                      fill="#8884d8"
+                      dataKey="value"
+                    >
+                      {caseStatusData.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                      ))}
+                    </Pie>
+                    <Tooltip formatter={(value) => [`${value} cases`, 'Count']} />
+                  </PieChart>
+                </ResponsiveContainer>
+              </CardContent>
+            </Card>
+            
+            {/* Cases by Category */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Cases by Category</CardTitle>
+                <CardDescription>Distribution of cases by legal category</CardDescription>
+              </CardHeader>
+              <CardContent className="h-[300px]">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={caseCategoryData}
+                      cx="50%"
+                      cy="50%"
+                      labelLine={false}
+                      label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
+                      outerRadius={80}
+                      fill="#8884d8"
+                      dataKey="value"
+                    >
+                      {caseCategoryData.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                      ))}
+                    </Pie>
+                    <Tooltip formatter={(value) => [`${value} cases`, 'Count']} />
+                  </PieChart>
+                </ResponsiveContainer>
+              </CardContent>
+            </Card>
+            
+            {/* Form Usage */}
+            <Card className="col-span-2">
+              <CardHeader>
+                <CardTitle>Form Template Usage</CardTitle>
+                <CardDescription>Most commonly used legal form templates</CardDescription>
+              </CardHeader>
+              <CardContent className="h-[300px]">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart 
+                    data={Object.entries(caseAnalytics?.formUsage || {}).map(([name, value]) => ({
+                      name,
+                      value
+                    }))}
+                    layout="vertical"
+                    margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
+                  >
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis type="number" />
+                    <YAxis dataKey="name" type="category" width={150} />
+                    <Tooltip formatter={(value) => [`${value} uses`, 'Count']} />
+                    <Bar dataKey="value" fill="#8884d8" barSize={20} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </CardContent>
+            </Card>
+          </div>
+        </TabsContent>
+        
+        {/* User Analytics Tab */}
+        <TabsContent value="users" className="space-y-4">
+          <div className="grid gap-4 md:grid-cols-2">
+            {/* User Role Distribution */}
+            <Card>
+              <CardHeader>
+                <CardTitle>User Role Distribution</CardTitle>
+                <CardDescription>Breakdown of users by role</CardDescription>
+              </CardHeader>
+              <CardContent className="h-[300px]">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={[
+                        { name: 'Clients', value: dashboardData?.clients || 0 },
+                        { name: 'Lawyers', value: dashboardData?.lawyers || 0 },
+                        { name: 'Admins', value: (dashboardData?.totalUsers || 0) - (dashboardData?.clients || 0) - (dashboardData?.lawyers || 0) }
+                      ]}
+                      cx="50%"
+                      cy="50%"
+                      labelLine={false}
+                      label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
+                      outerRadius={80}
+                      fill="#8884d8"
+                      dataKey="value"
+                    >
+                      <Cell fill="#0088FE" />
+                      <Cell fill="#00C49F" />
+                      <Cell fill="#FFBB28" />
+                    </Pie>
+                    <Tooltip formatter={(value) => [`${value} users`, 'Count']} />
+                  </PieChart>
+                </ResponsiveContainer>
+              </CardContent>
+            </Card>
+            
+            {/* Lawyer Approval Status */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Lawyer Approval Status</CardTitle>
+                <CardDescription>Status of lawyer registrations</CardDescription>
+              </CardHeader>
+              <CardContent className="h-[300px]">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={[
+                        { name: 'Approved', value: (dashboardData?.lawyers || 0) - (dashboardData?.pendingLawyers || 0) },
+                        { name: 'Pending', value: dashboardData?.pendingLawyers || 0 }
+                      ]}
+                      cx="50%"
+                      cy="50%"
+                      labelLine={false}
+                      label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
+                      outerRadius={80}
+                      fill="#8884d8"
+                      dataKey="value"
+                    >
+                      <Cell fill="#00C49F" />
+                      <Cell fill="#FFBB28" />
+                    </Pie>
+                    <Tooltip formatter={(value) => [`${value} lawyers`, 'Count']} />
+                  </PieChart>
+                </ResponsiveContainer>
+              </CardContent>
+            </Card>
+            
+            {/* User Activity */}
+            <Card className="col-span-2">
+              <CardHeader>
+                <CardTitle>User Activity</CardTitle>
+                <CardDescription>Recent user activity on the platform</CardDescription>
+              </CardHeader>
+              <CardContent className="h-[300px]">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart
+                    data={dashboardData.recentActivity?.map(day => ({
+                      name: day.name,
+                      users: day.users,
+                      cases: day.cases
+                    })) || generateDefaultActivityData()}
+                  >
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="name" />
+                    <YAxis />
+                    <Tooltip />
+                    <Legend />
+                    <Bar dataKey="users" name="New Users" fill="#0088FE" />
+                    <Bar dataKey="cases" name="New Cases" fill="#00C49F" />
+                  </BarChart>
+                </ResponsiveContainer>
+              </CardContent>
+            </Card>
+          </div>
+        </TabsContent>
+      </Tabs>
     </div>
   )
 }
-
-export default Dashboard
-
-
-
-
-
-
-
-
-
-
-
-

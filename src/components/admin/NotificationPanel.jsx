@@ -128,18 +128,28 @@ const NotificationPanel = ({ onNotificationRead }) => {
     )
   }
 
+  // Use the unreadCount from the API response instead of calculating it
+  const unreadCount = data?.unreadCount || 0;
+
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-bold text-gray-800">Notifications</h1>
+      <div className="flex justify-between items-center">
+        <h1 className="text-2xl font-bold text-gray-800">Notifications</h1>
+        <div className="flex items-center">
+          <span className="px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-sm font-medium">
+            {unreadCount} Unread
+          </span>
+        </div>
+      </div>
 
       <div className="bg-white shadow-md rounded-lg overflow-hidden">
         <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
           <h2 className="text-lg font-semibold text-gray-800">All Notifications</h2>
           <div className="flex items-center space-x-2">
             <span className="px-2 py-1 text-xs font-semibold rounded-full bg-blue-100 text-blue-800">
-              {notifications.filter((n) => n.status !== "Read").length} Unread
+              {unreadCount} Unread
             </span>
-            {notifications.filter((n) => n.status !== "Read").length > 0 && (
+            {unreadCount > 0 && (
               <button
                 onClick={handleMarkAllAsRead}
                 className="px-2 py-1 text-xs font-medium text-indigo-600 hover:text-indigo-800"
