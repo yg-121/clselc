@@ -55,6 +55,15 @@ const AppointmentModal = ({
         description: form.description,
       };
 
+      // Add lawyer ID if available in caseDetail
+      if (caseDetail.assigned_lawyer && caseDetail.assigned_lawyer._id) {
+        payload.lawyer = caseDetail.assigned_lawyer._id;
+      } else {
+        throw new Error("Lawyer information is missing. Please refresh the page and try again.");
+      }
+
+      console.log("Sending appointment payload:", payload);
+
       const response = await fetch("http://localhost:5000/api/appointments", {
         method: "POST",
         headers: {
@@ -216,4 +225,8 @@ const AppointmentModal = ({
 };
 
 export default AppointmentModal;
+
+
+
+
 

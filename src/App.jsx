@@ -31,6 +31,7 @@ import MyBids from "./pages/lawyer/MyBids";
 import LawyerProfile from "./pages/lawyer/LawyerProfile";
 import AdminDashboard from "./components/dashboard/AdminDashboard";
 import MessagesPage from "./pages/common/Messages";
+import ClientProfile from "./pages/client/ClientProfile";
 
 // Not Found Component
 const NotFound = () => {
@@ -175,7 +176,7 @@ function AppRoutes() {
           <Route
             path="/client/lawyer/:lawyerId"
             element={
-              <ProtectedRoute allowedRoles={["Lawyer"]}>
+              <ProtectedRoute allowedRoles={["Client"]}>
                 <ClientLawyerProfile />
               </ProtectedRoute>
             }
@@ -269,6 +270,14 @@ function AppRoutes() {
               </ProtectedRoute>
             }
           />
+          <Route
+            path="/client/clientprofile"
+            element={
+              <ProtectedRoute allowedRoles={["Client"]}>
+                <ClientProfile />
+              </ProtectedRoute>
+            }
+          />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </main>
@@ -288,6 +297,11 @@ function App() {
 }
 
 export default App;
+
+
+
+
+
 
 
 

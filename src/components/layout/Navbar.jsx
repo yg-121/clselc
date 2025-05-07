@@ -225,7 +225,7 @@ export default function Navbar() {
                 <Link
                   to={
                     user.role === "Lawyer"
-                      ? "/lawyer/profile"
+                      ? `/lawyer/profile/${user._id}`
                       : user.role === "Client"
                       ? "/client/clientprofile"
                       : "/admin/profile"
@@ -301,5 +301,8 @@ export default function Navbar() {
     </nav>
   );
 }
+
+
+
 
 
