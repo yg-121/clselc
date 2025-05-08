@@ -170,3 +170,28 @@
 .animate-fadeIn {
   animation: fadeIn 0.5s ease-in-out;
 }
+
+/* Add these styles to ensure proper layout with fixed footer */
+html, body, #root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  overflow-x: hidden;
+}
+
+#root {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+main {
+  flex: 1 0 auto;
+}
+
+footer {
+  flex-shrink: 0;
+}

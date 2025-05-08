@@ -39,6 +39,12 @@ export default function Login() {
         navigate("/lawyer/home");
       } else if (role === "Admin") {
         navigate("/dashboard/admin");
+      } else if (role === "LegalReviewer") {
+        navigate("/dashboard/reviewer");
+      } else {
+        // Fallback for unknown roles
+        console.warn("Unknown user role:", role);
+        navigate("/login");
       }
     } else {
       setError(result.message);

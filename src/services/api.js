@@ -3,7 +3,7 @@ import axios from 'axios'
 // Create an axios instance with the base URL
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_URL || 'http://localhost:5000/api',
-  timeout: 10000,
+  timeout: 30000, // Increase timeout to 30 seconds
   headers: {
     'Content-Type': 'application/json',
   },
@@ -27,15 +27,17 @@ api.interceptors.request.use(
   }
 )
 
-// Add response interceptor for debugging
+// Add response interceptor to handle errors
 api.interceptors.response.use(
   (response) => {
+    // Log successful responses
     console.log(`✅ API Response: ${response.status} from ${response.config.url}`)
     return response
   },
   (error) => {
-    console.error(`❌ API Response Error: ${error.response?.status || 'Unknown'} from ${error.config?.url}`)
-    console.error('Error details:', error.response?.data || error.message)
+    // Log error responses
+    console.error(`❌ API Response Error: ${error.response?.status || 'Unknown'} from ${error.config.url}`)
+    console.error('Error details: ', error.response?.data || error.message)
     return Promise.reject(error)
   }
 )

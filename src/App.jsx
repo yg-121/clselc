@@ -31,8 +31,11 @@ import MyBids from "./pages/lawyer/MyBids";
 import LawyerProfile from "./pages/lawyer/LawyerProfile";
 import AdminDashboard from "./components/dashboard/AdminDashboard";
 import MessagesPage from "./pages/common/Messages";
-
+import LegalReviewerDashboard from "./pages/dashboard/LegalReviewerDashboard";
+import { Toaster } from 'react-hot-toast';
 // Not Found Component
+
+
 const NotFound = () => {
   return (
     <div className="flex flex-col items-center justify-center min-h-screen bg-gray-100">
@@ -78,6 +81,8 @@ const ProtectedRoute = ({ children, allowedRoles }) => {
       return <Navigate to="/lawyer/home" replace />;
     } else if (user.role === "Admin") {
       return <Navigate to="/dashboard/admin" replace />;
+    } else if (user.role === "LegalReviewer") {
+      return <Navigate to="/dashboard/reviewer" replace />;
     } else {
       // Fallback to login if role is unknown
       return <Navigate to="/login" replace />;
@@ -113,7 +118,7 @@ function AppRoutes() {
   return (
     <div className="flex flex-col min-h-screen">
       {!hideNavbarFooter && <Navbar />}
-      <main className={hideNavbarFooter ? "" : "flex-grow"}>
+      <main className={hideNavbarFooter ? "" : "flex-grow pb-4"}>
         <Routes>
           <Route path="/" element={<Navigate to="/login" />} />
           <Route path="/login" element={<Login />} />
@@ -282,6 +287,14 @@ function AppRoutes() {
               </ProtectedRoute>
             }
           />
+          <Route
+            path="/dashboard/reviewer"
+            element={
+              <ProtectedRoute allowedRoles={["LegalReviewer"]}>
+                <LegalReviewerDashboard />
+              </ProtectedRoute>
+            }
+          />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </main>
@@ -294,6 +307,7 @@ function App() {
   return (
     <Router>
       <AuthProvider>
+        <Toaster position="top-right" />
         <AppRoutes />
       </AuthProvider>
     </Router>

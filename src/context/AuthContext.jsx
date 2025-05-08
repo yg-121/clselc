@@ -31,7 +31,7 @@ export const AuthProvider = ({ children }) => {
       localStorage.setItem("authResponse", JSON.stringify(response));
       const newToken = response.data.token;
       localStorage.setItem("token", newToken);
-      console.log()
+      
       if (!newToken) throw new Error("No token in response");
 
       setToken(newToken);

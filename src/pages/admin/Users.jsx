@@ -8,7 +8,7 @@ import { Button } from "../../components/ui/button"
 import { Input } from "../../components/ui/input"
 import { Badge } from "../../components/ui/badge"
 import { Search, UserCheck, UserX, UserPlus, FileText, Shield, Trash2, AlertTriangle } from "lucide-react"
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "../../components/ui/dialog"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "../../components/ui/dialog"
 import { toast, ToastContainer } from "react-toastify"
 import "react-toastify/dist/ReactToastify.css"
 
@@ -21,6 +21,50 @@ const Label = ({ htmlFor, children }) => (
     {children}
   </label>
 )
+
+// Add this function to properly format license file URLs
+const getLicenseFileUrl = (licenseFile) => {
+  if (!licenseFile) return null;
+  
+  // If it's already a base64 string, return it directly
+  if (licenseFile.startsWith('data:') || licenseFile.includes(';base64,')) {
+    return licenseFile;
+  }
+  
+  // Ensure the path starts with a slash
+  const path = licenseFile.startsWith('/') ? licenseFile : `/${licenseFile}`;
+  
+  // Construct the full URL with proper slash between base URL and path
+  const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+  return `${baseUrl}${path}`;
+};
+
+// Add this function to directly open the license file
+const openLicenseFile = (licenseFile, e) => {
+  if (e) {
+    e.preventDefault();
+    e.stopPropagation();
+  }
+  
+  if (!licenseFile) {
+    toast.warning("No license file available");
+    return;
+  }
+  
+  // Use the getLicenseFileUrl function to get the proper URL
+  const licenseUrl = getLicenseFileUrl(licenseFile);
+  
+  // Create a temporary anchor element to force an external link
+  const a = document.createElement('a');
+  a.href = licenseUrl;
+  a.target = '_blank';
+  a.rel = 'noopener noreferrer';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  
+  console.log("Opening license file at:", licenseUrl);
+};
 
 export default function Users() {
   const [searchTerm, setSearchTerm] = useState("")
@@ -52,9 +96,24 @@ export default function Users() {
   const { data: pendingLawyersData, isLoading: isLoadingPending, error: pendingError } = useQuery({
     queryKey: ['pending-lawyers'],
     queryFn: async () => {
-      const response = await api.get("/users/pending-lawyers")
-      console.log("API Response (pending lawyers):", response.data)
-      return response.data.pendingLawyers || []
+      const response = await api.get("/users/pending-lawyers");
+      console.log("API Response (pending lawyers):", response.data);
+      
+      // Ensure we have the license_file field for each lawyer
+      const pendingLawyers = response.data.pendingLawyers || [];
+      
+      // Log the license file paths for debugging
+      if (pendingLawyers.length > 0) {
+        console.log("License file paths:");
+        pendingLawyers.forEach(lawyer => {
+          console.log(`${lawyer.username}: ${lawyer.license_file}`);
+          if (lawyer.license_file) {
+            console.log(`Constructed URL: ${getLicenseFileUrl(lawyer.license_file)}`);
+          }
+        });
+      }
+      
+      return pendingLawyers;
     }
   })
 
@@ -229,9 +288,18 @@ export default function Users() {
   
   // Handle view license
   const handleViewLicense = (lawyer) => {
-    setSelectedLawyer(lawyer)
-    setShowLicenseDialog(true)
-  }
+    console.log("Viewing license for lawyer:", lawyer);
+    
+    // Check if license file exists
+    if (!lawyer.license_file) {
+      toast.warning(`No license file available for ${lawyer.username}`);
+      return;
+    }
+    
+    // Set the selected lawyer and open the dialog
+    setSelectedLawyer(lawyer);
+    setShowLicenseDialog(true);
+  };
 
   if (isLoadingUsers || isLoadingPending) {
     return <div className="flex justify-center items-center h-64">Loading...</div>
@@ -403,11 +471,14 @@ export default function Users() {
                                   >
                                     <UserX className="h-4 w-4" />
                                   </Button>
-                                  <Button 
-                                    size="sm" 
-                                    variant="outline" 
-                                    className="h-8 w-8 p-0"
-                                    onClick={() => handleViewLicense(user)}
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={(e) => {
+                                      e.preventDefault();
+                                      e.stopPropagation();
+                                      openLicenseFile(user.license_file, e);
+                                    }}
                                     title="View License"
                                   >
                                     <FileText className="h-4 w-4" />
@@ -493,14 +564,35 @@ export default function Users() {
           <DialogHeader>
             <DialogTitle>Lawyer License - {selectedLawyer?.username}</DialogTitle>
           </DialogHeader>
+          
           <div className="py-4">
             {selectedLawyer?.license_file ? (
-              <div className="border rounded-md p-4">
-                <iframe 
-                  src={`data:application/pdf;base64,${selectedLawyer.license_file}`} 
-                  className="w-full h-96"
-                  title="License Document"
-                />
+              <div className="space-y-4">
+                {/* PDF Viewer */}
+                <div className="w-full h-[70vh] border rounded-md overflow-hidden bg-gray-100">
+                  <iframe 
+                    src={getLicenseFileUrl(selectedLawyer.license_file)} 
+                    className="w-full h-full" 
+                    title="License Document"
+                  />
+                </div>
+                
+                {/* Direct backend URL for download */}
+                <div className="text-center p-4 border rounded-md bg-gray-50">
+                  <p className="mb-4">Download or view the license file:</p>
+                  <Button 
+                    onClick={() => openLicenseFile(selectedLawyer.license_file)}
+                    className="bg-blue-600 hover:bg-blue-700 text-white"
+                  >
+                    Open License File
+                  </Button>
+                </div>
+                
+                {/* Show file path for reference */}
+                <div className="p-2 bg-gray-100 rounded text-sm">
+                  <p><strong>File path:</strong> {selectedLawyer.license_file}</p>
+                  <p><strong>Full URL:</strong> {getLicenseFileUrl(selectedLawyer.license_file)}</p>
+                </div>
               </div>
             ) : (
               <div className="text-center text-gray-500 py-8">
@@ -508,6 +600,7 @@ export default function Users() {
               </div>
             )}
           </div>
+          
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowLicenseDialog(false)}>Close</Button>
             <Button 
@@ -515,7 +608,7 @@ export default function Users() {
                 handleApproveLawyer(selectedLawyer._id);
                 setShowLicenseDialog(false);
               }}
-              className="bg-green-600 hover:bg-green-700"
+              className="bg-green-600 hover:bg-green-700 text-white"
             >
               Approve Lawyer
             </Button>
