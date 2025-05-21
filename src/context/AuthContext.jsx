@@ -1,61 +1,97 @@
-/* eslint-disable no-unused-vars */
+import { createContext, useContext, useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
+import api from "../services/api.js";
 
-import { useState, useEffect } from "react";
-import { auth } from "../services/api";
-import { AuthContext } from "./AuthContextDefinition";
+// Create the context
+export const AuthContext = createContext();
 
+// Provider component
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
-  const [token, setToken] = useState(localStorage.getItem("token") || null);
+  const [token, setToken] = useState(null);
+  const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-
-  const getToken = () => {
-    return token || localStorage.getItem("token") || null;
-  };
+  const navigate = useNavigate();
 
   useEffect(() => {
-    const verifyToken = async () => {
-      setLoading(true);
-      const storedResponse = JSON.parse(localStorage.getItem("authResponse"));
-      setUser(storedResponse.data);
+    const initializeAuth = async () => {
+      const storedToken = localStorage.getItem("token");
+      const storedUserId = localStorage.getItem("userId");
+      const storedRole = localStorage.getItem("userRole");
+
+      if (storedToken && storedUserId && storedRole) {
+        try {
+          api.defaults.headers.common["Authorization"] = `Bearer ${storedToken}`;
+          // Fix the API endpoint path to match backend routes
+          const response = await api.get(`/users/${storedUserId}`);
+          console.log("User fetch response:", response.data);
+          setUser({
+            _id: response.data.user._id,
+            username: response.data.user.username,
+            role: response.data.user.role,
+            status: response.data.user.status,
+          });
+          setToken(storedToken);
+        } catch (err) {
+          console.error("Auth initialization error:", err.response?.data || err.message);
+          localStorage.removeItem("token");
+          localStorage.removeItem("userId");
+          localStorage.removeItem("userRole");
+          localStorage.removeItem("authResponse");
+          setUser(null);
+          setToken(null);
+          setError("Failed to initialize session. Please log in again.");
+        }
+      }
       setLoading(false);
     };
 
-    verifyToken();
+    initializeAuth();
   }, []);
 
   const login = async (email, password) => {
     try {
-      const response = await auth.login({ email, password });
-      localStorage.setItem("authResponse", JSON.stringify(response));
-      const newToken = response.data.token;
-      localStorage.setItem("token", newToken);
-      
-      if (!newToken) throw new Error("No token in response");
+      const response = await api.post("/auth/login", { email, password });
+      console.log("Login response:", response.data);
+      const { _id, username, role, status } = response.data.data.user;
+      const receivedToken = response.data.data.token;
 
-      setToken(newToken);
-      setUser(response.data);
-      setError(null);
-      return { success: true, user: response.data };
+      setUser({ _id, username, role, status });
+      setToken(receivedToken);
+      localStorage.setItem("token", receivedToken);
+      localStorage.setItem("userId", _id);
+      localStorage.setItem("userRole", role);
+      localStorage.setItem("authResponse", JSON.stringify(response.data.data));
+      api.defaults.headers.common["Authorization"] = `Bearer ${receivedToken}`;
+      setError("");
+
+      return { success: true, user: { _id, username, role, status } };
     } catch (err) {
+      console.error("Login catch error:", err.response?.data, err.message);
       const message = err.response?.data?.message || "Login failed";
       setError(message);
       return { success: false, message };
     }
   };
 
-  const register = async (data) => {
+  const register = async (formData) => {
     try {
-      const response = await auth.register(data);
-      console.log("register response:", response.data);
-      const { token: newToken, user } = response.data;
-      if (!newToken) throw new Error("No token in response");
-      localStorage.setItem("token", newToken);
-      setToken(newToken);
-      setUser(user);
-      setError(null);
-      return { success: true, user };
+      const response = await api.post("/auth/register", formData, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+      const { _id, username, role, status } = response.data.data.user;
+      const receivedToken = response.data.data.token;
+
+      setUser({ _id, username, role, status });
+      setToken(receivedToken);
+      localStorage.setItem("token", receivedToken);
+      localStorage.setItem("userId", _id);
+      localStorage.setItem("userRole", role);
+      localStorage.setItem("authResponse", JSON.stringify(response.data.data));
+      api.defaults.headers.common["Authorization"] = `Bearer ${receivedToken}`;
+      setError("");
+
+      return { success: true, user: { _id, username, role, status } };
     } catch (err) {
       const message = err.response?.data?.message || "Registration failed";
       setError(message);
@@ -63,23 +99,31 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
+  const logout = () => {
+    setUser(null);
+    setToken(null);
+    localStorage.removeItem("token");
+    localStorage.removeItem("userId");
+    localStorage.removeItem("userRole");
+    localStorage.removeItem("authResponse");
+    delete api.defaults.headers.common["Authorization"];
+    navigate("/login");
+  };
+
   const forgotPassword = async (email) => {
     try {
-      const response = await auth.forgotPassword({ email });
-      setError(null);
+      const response = await api.post("/auth/forgot-password", { email });
       return { success: true, message: response.data.message };
     } catch (err) {
-      const message =
-        err.response?.data?.message || "Failed to send reset email";
+      const message = err.response?.data?.message || "Failed to send reset email";
       setError(message);
       return { success: false, message };
     }
   };
 
-  const resetPassword = async (token, newPassword) => {
+  const resetPassword = async (token, password) => {
     try {
-      const response = await auth.resetPassword({ token, newPassword });
-      setError(null);
+      const response = await api.post("/auth/reset-password", { token, password });
       return { success: true, message: response.data.message };
     } catch (err) {
       const message = err.response?.data?.message || "Failed to reset password";
@@ -88,22 +132,13 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  const logout = () => {
-    localStorage.removeItem("token");
-    setToken(null);
-    setUser(null);
-    setError(null);
-  };
-
   return (
     <AuthContext.Provider
       value={{
         user,
         token,
-        getToken,
-        setToken,
-        loading,
         error,
+        loading,
         login,
         register,
         logout,
@@ -114,4 +149,13 @@ export const AuthProvider = ({ children }) => {
       {children}
     </AuthContext.Provider>
   );
+};
+
+// Hook to use the context
+export const useAuth = () => {
+  const context = useContext(AuthContext);
+  if (!context) {
+    throw new Error("useAuth must be used within an AuthProvider");
+  }
+  return context;
 };

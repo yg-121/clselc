@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { EyeIcon, EyeSlashIcon } from "@heroicons/react/24/solid";
-import { useAuth } from "../../hooks/authHooks";
+import { useAuth } from "../../hooks/authHooks.js";
 
 export default function Register() {
   const [formData, setFormData] = useState({

@@ -6,12 +6,12 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { User, Mail, Phone, Lock } from "react-feather"
 import api, { handleApiError } from "../../utils/api"
 import ErrorAlert from "../../components/admin/ErrorAlert"
-import { AuthContext } from "../../context/AuthContextDefinition"
+import { AuthContext } from "../../context/AuthContext.jsx"
 import { toast } from "react-toastify"
 
 const Profile = () => {
   const queryClient = useQueryClient()
-  const { currentUser } = useContext(AuthContext)
+  const { user } = useContext(AuthContext)
   const [error, setError] = useState("")
   const [profileData, setProfileData] = useState({
     username: "",
@@ -398,11 +398,11 @@ const Profile = () => {
               </div>
 
               <h4 className="text-xl font-medium text-gray-900">
-                {profileData.username || currentUser?.username || "Admin User"}
+                {profileData.username || user?.username || "Admin User"}
               </h4>
 
               <p className="text-sm text-gray-500 mt-1">
-                {profileData.email || currentUser?.email || "admin@example.com"}
+                {profileData.email || user?.email || "admin@example.com"}
               </p>
 
               <div className="mt-4 bg-indigo-50 text-indigo-700 px-3 py-1 rounded-full text-sm font-medium">Admin</div>

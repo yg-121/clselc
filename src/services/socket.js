@@ -6,25 +6,59 @@ let socket = null
 // Socket service
 const socketService = {
   // Initialize socket connection
-  initialize() {
+  initialize(userId) {
     if (!socket) {
-      // Use relative URL for socket connection (same origin)
-      socket = io("/", {
-        path: "/socket.io",
-        auth: {
-          token: localStorage.getItem("token"),
-        },
-      })
+      try {
+        // Get authentication token
+        const token = localStorage.getItem("token")
+        
+        if (!token) {
+          console.error("No authentication token found")
+          return null
+        }
+        
+        // Use absolute URL instead of relative URL
+        const socketUrl = import.meta.env.VITE_API_URL || "http://localhost:5000"
+        
+        console.log(`Initializing socket connection to ${socketUrl}`)
+        
+        // Create socket with proper configuration
+        socket = io(socketUrl, {
+          path: "/socket.io",
+          auth: {
+            token,
+            userId
+          },
+          transports: ["websocket", "polling"],
+          reconnectionAttempts: 5,
+          reconnectionDelay: 1000,
+          timeout: 10000
+        })
 
-      console.log("Socket initialized")
+        console.log("Socket initialized")
 
-      socket.on("connect", () => {
-        console.log("Connected to socket server")
-      })
+        socket.on("connect", () => {
+          console.log("Connected to socket server with ID:", socket.id)
+        })
 
-      socket.on("connect_error", (err) => {
-        console.error("Socket connection error:", err.message)
-      })
+        socket.on("connect_error", (err) => {
+          console.error("Socket connection error:", err)
+          console.error("Error details:", err.message || "No error message")
+          
+          // If we have authentication issues, don't keep trying
+          if (err.message && (err.message.includes("auth") || err.message.includes("token"))) {
+            console.error("Authentication error, disconnecting socket")
+            this.disconnect()
+          }
+        })
+        
+        socket.on("disconnect", (reason) => {
+          console.log("Socket disconnected:", reason)
+        })
+      } catch (error) {
+        console.error("Error creating socket:", error)
+        socket = null
+      }
     }
     return socket
   },

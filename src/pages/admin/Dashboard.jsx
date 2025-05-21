@@ -1,7 +1,6 @@
 import { useQuery } from "@tanstack/react-query"
-import api from "../../services/api"
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "../../components/ui/card"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "../../components/ui/tabs"
+import api from "../../services/api.js"
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "../../components/ui/card.jsx"
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, 
   PieChart, Pie, Cell, LineChart, Line, Legend, AreaChart, Area 
@@ -10,6 +9,7 @@ import {
   Users, Briefcase, UserCheck, Clock, Activity, 
   Calendar, TrendingUp, AlertCircle 
 } from "lucide-react"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "../../components/ui/tabs.jsx";
 
 export default function Dashboard() {
   // Fetch admin stats with more detailed debugging

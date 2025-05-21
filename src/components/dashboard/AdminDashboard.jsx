@@ -5,24 +5,24 @@ import { Routes, Route, useNavigate } from "react-router-dom"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import { ToastContainer } from "react-toastify"
 import "react-toastify/dist/ReactToastify.css"
-import { AuthContext } from "../../context/AuthContextDefinition"
-import { ScrollArea } from "../ui/scroll-area"
-import { Button } from "../ui/button"
+import { AuthContext } from "../../context/AuthContext.jsx"
+import { ScrollArea } from "../ui/scroll-area.jsx"
+import { Button } from "../ui/button.jsx"
 import { 
   Home, Users as UsersIcon, Briefcase, Bell, FileText, 
   User, Menu, X, LogOut, Settings 
 } from "lucide-react"
-import Dashboard from "../../pages/admin/Dashboard"
-import Users from "../../pages/admin/Users"
-import SimpleUserList from "../../pages/admin/SimpleUserList"
-import Cases from "../../pages/admin/Cases"
-import Notifications from "../../pages/admin/Notifications"
-import AuditLogs from "../../pages/admin/AuditLogs"
-import Profile from "../../pages/admin/Profile"
-import ErrorAlert from "../admin/ErrorAlert"
-import io from "socket.io-client"
-import { Badge } from "../ui/badge"
-import api from "../../services/api"  // Import the API service
+import Dashboard from "../../pages/admin/Dashboard.jsx"
+import Users from "../../pages/admin/Users.jsx"
+import SimpleUserList from "../../pages/admin/SimpleUserList.jsx"
+import Cases from "../../pages/admin/Cases.jsx"
+import Notifications from "../../pages/admin/Notifications.jsx"
+import AuditLogs from "../../pages/admin/AuditLogs.jsx"
+import Profile from "../../pages/admin/Profile.jsx"
+import ErrorAlert from "../admin/ErrorAlert.jsx"
+import { Badge } from "../ui/badge.jsx"
+import api from "../../services/api.js"  // Import the API service
+import { initializeSocket, disconnectSocket } from "../../utils/socketUtils.js";
 
 // Create a client for React Query
 const queryClient = new QueryClient({
@@ -82,41 +82,36 @@ const AdminDashboard = () => {
       return;
     }
 
-    // Connect to Socket.IO server
-    const socketUrl = import.meta.env.VITE_SOCKET_URL || "http://localhost:5000";
-    console.log("Connecting to socket server at:", socketUrl);
-    
-    const socketInstance = io(socketUrl, {
-      auth: {
-        token: localStorage.getItem("token"),
-      },
-      transports: ['websocket', 'polling'],
-      reconnection: true,
-      reconnectionAttempts: 5,
-      reconnectionDelay: 1000,
-    });
-
-    socketInstance.on("connect", () => {
-      console.log("Connected to Socket.IO server");
-    });
-
-    socketInstance.on("connect_error", (err) => {
-      console.error("Socket connection error:", err);
-      setError("Failed to connect to notification server");
-    });
-
-    socketInstance.on("new_notification", (data) => {
-      console.log("New notification received:", data);
-      setNotificationCount((prev) => prev + 1);
-      queryClient.invalidateQueries("notifications");
-    });
-
-    setSocket(socketInstance);
+    // Initialize socket with better error handling
+    let socketInstance = null;
+    try {
+      socketInstance = initializeSocket();
+      if (socketInstance) {
+        console.log("Socket initialized in AdminDashboard");
+        
+        socketInstance.on("new_notification", (data) => {
+          console.log("New notification received:", data);
+          setNotificationCount((prev) => prev + 1);
+          queryClient.invalidateQueries("notifications");
+        });
+        
+        setSocket(socketInstance);
+      } else {
+        console.warn("Failed to initialize socket in AdminDashboard");
+      }
+    } catch (error) {
+      console.error("Error initializing socket in AdminDashboard:", error);
+    }
 
     return () => {
+      // Clean up socket connection
       if (socketInstance) {
-        console.log("Disconnecting socket");
-        socketInstance.disconnect();
+        try {
+          socketInstance.off("new_notification");
+          disconnectSocket();
+        } catch (error) {
+          console.error("Error disconnecting socket:", error);
+        }
       }
     };
   }, [user, navigate]);

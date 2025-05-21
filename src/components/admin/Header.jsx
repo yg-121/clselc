@@ -3,8 +3,8 @@
 import { Bell, Menu, User, LogOut, Settings } from "lucide-react"
 import { useState, useRef, useEffect } from "react"
 import { useNavigate } from "react-router-dom"
-import { Button } from "../ui/button"
-import { Badge } from "../ui/badge"
+import { Button } from "../ui/button.jsx"
+import { Badge } from "../ui/badge.jsx"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -12,7 +12,7 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from "../ui/dropdown-menu"
+} from "../ui/dropdown-menu.jsx"
 
 const AdminHeader = ({ user, logout, toggleSidebar, notificationCount }) => {
   const navigate = useNavigate()

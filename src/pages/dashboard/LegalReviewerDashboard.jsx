@@ -1,37 +1,53 @@
-import React from "react";
-import { useState, useContext, useRef } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import React, { useState, useContext, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { useQuery, QueryClient, QueryClientProvider, useQueryClient } from "@tanstack/react-query";
-import api from "../../services/api";
-import { toast } from "react-hot-toast";
-import { AuthContext } from "../../context/AuthContextDefinition";
+import api from "../../services/api.js";
+import { toast, Toaster } from "react-hot-toast";
+import { AuthContext } from "../../context/AuthContext.jsx";
 import {
   FileText,
   Check,
   X,
   AlertTriangle,
-  User,
   LogOut,
-  Menu,
-  Download
+  Download,
 } from "lucide-react";
 import {
   Card,
   CardContent,
   CardHeader,
   CardTitle,
-  CardDescription
-} from "../../components/ui/card";
-import { Button } from "../../components/ui/button";
-import { Separator } from "../../components/ui/separator";
-import { Toaster } from "react-hot-toast";
+  CardDescription,
+} from "../../components/ui/card.jsx";
+import { Button } from "../../components/ui/button.jsx";
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
-  DialogFooter
-} from "../../components/ui/dialog";
+  DialogFooter,
+} from "../../components/ui/dialog.jsx";
+
+// Inline CSS to ensure textarea is LTR
+const styles = `
+  .ltr-wrapper {
+    direction: ltr !important;
+  }
+  .ltr-wrapper .comment-textarea,
+  .comment-textarea {
+    direction: ltr !important;
+    text-align: left !important;
+    unicode-bidi: normal !important;
+    writing-mode: horizontal-tb !important;
+  }
+  /* Global reset for all textareas as a fallback */
+  textarea {
+    direction: ltr !important;
+    text-align: left !important;
+    unicode-bidi: normal !important;
+    writing-mode: horizontal-tb !important;
+  }
+`;
 
 // Create a new QueryClient instance
 const queryClient = new QueryClient();
@@ -46,21 +62,48 @@ function ReviewerDashboardContent() {
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("Pending");
   const [sortOrder, setSortOrder] = useState("newest");
+  const [showActionDialog, setShowActionDialog] = useState(null); // Tracks which lawyer and action (approve/reject)
+  const [actionComments, setActionComments] = useState("");
+  const [loadingActions, setLoadingActions] = useState({}); // Tracks loading state for each lawyer
+
+  // Debug textarea styles (optional, can remove after confirmation)
+  useEffect(() => {
+    const textarea = document.querySelector(".comment-textarea");
+    if (textarea) {
+      const computedStyles = window.getComputedStyle(textarea);
+      console.log("Textarea computed styles:", {
+        direction: computedStyles.direction,
+        textAlign: computedStyles.textAlign,
+        unicodeBidi: computedStyles.unicodeBidi,
+        writingMode: computedStyles.writingMode,
+      });
+    }
+  }, [showActionDialog]);
 
   // Function to properly format the license file URL
   const getLicenseFileUrl = (licenseFile) => {
     if (!licenseFile) return null;
-    
+
     // If it's already a base64 string, return it directly
-    if (licenseFile.startsWith('data:') || licenseFile.includes(';base64,')) {
+    if (licenseFile.startsWith("data:") || licenseFile.includes(";base64,")) {
       return licenseFile;
     }
-    
+
     // Ensure the path starts with a slash
-    const path = licenseFile.startsWith('/') ? licenseFile : `/${licenseFile}`;
-    
+    let path = licenseFile.startsWith("/") ? licenseFile : `/${licenseFile}`;
+  
+    // Remove /api prefix if it exists in the path
+    if (path.startsWith("/api/")) {
+      path = path.substring(4);
+    }
+  
+    // Check if path includes 'uploads' directory
+    if (!path.includes("/uploads/") && !path.includes("/Uploads/")) {
+      path = `/uploads${path}`;
+    }
+
     // Construct the full URL with proper slash between base URL and path
-    const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+    const baseUrl = import.meta.env.VITE_API_URL || "http://localhost:5000";
     return `${baseUrl}${path}`;
   };
 
@@ -70,13 +113,13 @@ function ReviewerDashboardContent() {
       toast.error("No license file available");
       return;
     }
-    
+
     const licenseUrl = getLicenseFileUrl(licenseFile);
     console.log("Opening license file:", licenseUrl);
-    
+
     setSelectedLicense(licenseUrl);
     setShowLicenseDialog(true);
-    
+
     // Debug to verify state is changing
     console.log("Dialog should be open now:", true);
   };
@@ -84,9 +127,9 @@ function ReviewerDashboardContent() {
   // Function to download license file
   const downloadLicenseFile = () => {
     if (!selectedLicense) return;
-    
+
     // Create a temporary anchor element to force download
-    const a = document.createElement('a');
+    const a = document.createElement("a");
     a.href = selectedLicense;
     a.download = `license-file-${Date.now()}.pdf`;
     document.body.appendChild(a);
@@ -95,65 +138,68 @@ function ReviewerDashboardContent() {
   };
 
   // Fetch all lawyers data (not just pending)
-  const { 
-    data: allLawyersData, 
-    isLoading: isLoadingLawyers, 
+  const {
+    data: allLawyersData,
+    isLoading: isLoadingLawyers,
     error: lawyersError,
-    refetch: refetchLawyers 
+    refetch: refetchLawyers,
   } = useQuery({
-    queryKey: ['allLawyers'],
+    queryKey: ["allLawyers"],
     queryFn: async () => {
       try {
         console.log("Fetching lawyers...");
         // First try to get all lawyers
         const response = await api.get("/users/lawyers");
         console.log("All lawyers response:", response.data);
-        
+
         // If that doesn't work or returns empty, try the pending-lawyers endpoint
         if (!response.data?.lawyers || response.data.lawyers.length === 0) {
           console.log("No lawyers found, trying pending-lawyers endpoint...");
           const pendingResponse = await api.get("/users/pending-lawyers");
           console.log("Pending lawyers response:", pendingResponse.data);
-          
+
           // Return pending lawyers with status explicitly set to "Pending"
-          return (pendingResponse.data?.pendingLawyers || []).map(lawyer => ({
+          return (pendingResponse.data?.pendingLawyers || []).map((lawyer) => ({
             ...lawyer,
-            status: "Pending" // Ensure status is set
+            status: "Pending", // Ensure status is set
           }));
         }
-        
+
         // Return all lawyers
         return response.data?.lawyers || [];
       } catch (error) {
         console.error("Error fetching lawyers:", error);
         
-        // Fallback to pending-lawyers endpoint if the first one fails
-        try {
-          console.log("Trying fallback to pending-lawyers endpoint...");
-          const pendingResponse = await api.get("/users/pending-lawyers");
-          console.log("Fallback pending lawyers response:", pendingResponse.data);
-          
-          // Return pending lawyers with status explicitly set to "Pending"
-          return (pendingResponse.data?.pendingLawyers || []).map(lawyer => ({
-            ...lawyer,
-            status: "Pending" // Ensure status is set
-          }));
-        } catch (fallbackError) {
-          console.error("Fallback also failed:", fallbackError);
-          throw error; // Throw the original error
+        // If it's a permission error, try the pending-lawyers endpoint
+        if (error.response?.status === 403) {
+          try {
+            console.log("Permission denied, trying pending-lawyers endpoint...");
+            const pendingResponse = await api.get("/users/pending-lawyers");
+            console.log("Pending lawyers response:", pendingResponse.data);
+            
+            return (pendingResponse.data?.pendingLawyers || []).map((lawyer) => ({
+              ...lawyer,
+              status: "Pending",
+            }));
+          } catch (fallbackError) {
+            console.error("Fallback also failed:", fallbackError);
+            throw error; // Throw the original error
+          }
         }
+        
+        throw error;
       }
     },
     refetchOnWindowFocus: false,
-    staleTime: 30000
+    staleTime: 30000,
   });
 
   // Fetch pending lawyers specifically
-  const { 
+  const {
     data: pendingLawyersData,
-    isLoading: isLoadingPending
+    isLoading: isLoadingPending,
   } = useQuery({
-    queryKey: ['pendingLawyers'],
+    queryKey: ["pendingLawyers"],
     queryFn: async () => {
       try {
         const response = await api.get("/users/pending-lawyers");
@@ -165,51 +211,53 @@ function ReviewerDashboardContent() {
       }
     },
     refetchOnWindowFocus: false,
-    staleTime: 30000
+    staleTime: 30000,
   });
 
   // Combine all lawyers with pending lawyers to ensure we have all data
   const combinedLawyers = React.useMemo(() => {
     const allLawyers = allLawyersData || [];
     const pendingLawyers = pendingLawyersData || [];
-    
+
     // Create a map of existing lawyers by ID
     const lawyerMap = new Map();
-    allLawyers.forEach(lawyer => {
+    allLawyers.forEach((lawyer) => {
       lawyerMap.set(lawyer._id, lawyer);
     });
-    
+
     // Add pending lawyers that aren't already in the map
-    pendingLawyers.forEach(lawyer => {
+    pendingLawyers.forEach((lawyer) => {
       if (!lawyerMap.has(lawyer._id)) {
         lawyerMap.set(lawyer._id, { ...lawyer, status: "Pending" });
       }
     });
-    
+
     return Array.from(lawyerMap.values());
   }, [allLawyersData, pendingLawyersData]);
 
   // Filter and sort lawyers based on search term, status filter, and sort order
   const filteredLawyers = React.useMemo(() => {
     if (!combinedLawyers.length) return [];
-    
+
     console.log("Filtering from combined lawyers:", combinedLawyers);
-    
+
     return combinedLawyers
-      .filter(lawyer => {
+      .filter((lawyer) => {
         // Filter by status (case insensitive)
         const status = (lawyer.status || "").toLowerCase();
-        const statusMatch = statusFilter === "All" || 
-                           (statusFilter === "Pending" && status === "pending") ||
-                           (statusFilter === "Active" && status === "active") ||
-                           (statusFilter === "Rejected" && status === "rejected");
-        
+        const statusMatch =
+          statusFilter === "All" ||
+          (statusFilter === "Pending" && status === "pending") ||
+          (statusFilter === "Active" && status === "active") ||
+          (statusFilter === "Rejected" && status === "rejected");
+
         // Filter by search term (case insensitive)
-        const searchMatch = !searchTerm || 
-                           (lawyer.username?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                            lawyer.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                            lawyer.name?.toLowerCase().includes(searchTerm.toLowerCase()));
-        
+        const searchMatch =
+          !searchTerm ||
+          (lawyer.username?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            lawyer.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            lawyer.name?.toLowerCase().includes(searchTerm.toLowerCase()));
+
         return statusMatch && searchMatch;
       })
       .sort((a, b) => {
@@ -230,50 +278,149 @@ function ReviewerDashboardContent() {
   }, [combinedLawyers, searchTerm, statusFilter, sortOrder]);
 
   // Get counts for dashboard stats
-  const pendingCount = React.useMemo(() => 
-    combinedLawyers.filter(l => (l.status || "").toLowerCase() === "pending").length, 
-    [combinedLawyers]
-  );
-  
-  const approvedCount = React.useMemo(() => 
-    combinedLawyers.filter(l => (l.status || "").toLowerCase() === "active").length, 
-    [combinedLawyers]
-  );
-  
-  const rejectedCount = React.useMemo(() => 
-    combinedLawyers.filter(l => (l.status || "").toLowerCase() === "rejected").length, 
+  const pendingCount = React.useMemo(
+    () => combinedLawyers.filter((l) => (l.status || "").toLowerCase() === "pending").length,
     [combinedLawyers]
   );
 
+  const approvedCount = React.useMemo(
+    () => combinedLawyers.filter((l) => (l.status || "").toLowerCase() === "active").length,
+    [combinedLawyers]
+  );
+
+  const rejectedCount = React.useMemo(
+    () => combinedLawyers.filter((l) => (l.status || "").toLowerCase() === "rejected").length,
+    [combinedLawyers]
+  );
+
+  // Helper function to make API call with timeout
+  const apiWithTimeout = async (method, url, data, timeout = 10000) => {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeout);
+
+    try {
+      const response = await api({
+        method,
+        url,
+        data,
+        signal: controller.signal,
+      });
+      clearTimeout(timeoutId);
+      return response;
+    } catch (error) {
+      clearTimeout(timeoutId);
+      if (error.name === "AbortError") {
+        throw new Error("Request timed out");
+      }
+      throw error;
+    }
+  };
+
   // Handle approve lawyer
   const handleApproveLawyer = async (lawyerId) => {
+    const startTime = performance.now(); // Debug: Measure start time
+    setLoadingActions((prev) => ({ ...prev, [lawyerId]: "approve" }));
     const toastId = toast.loading("Approving lawyer...");
+
+    // Optimistic update
+    const previousAllLawyers = queryClient.getQueryData(["allLawyers"]);
+    const previousPendingLawyers = queryClient.getQueryData(["pendingLawyers"]);
+    queryClient.setQueryData(["allLawyers"], (old) => {
+      const index = old.findIndex((l) => l._id === lawyerId);
+      if (index === -1) return old;
+      const newData = [...old];
+      newData[index] = {
+        ...newData[index],
+        status: "Active",
+        verificationStatus: "Verified",
+      };
+      return newData;
+    });
+    queryClient.setQueryData(["pendingLawyers"], (old) =>
+      old.filter((l) => l._id !== lawyerId)
+    );
+
     try {
-      const response = await api.put("/users/approve-lawyer", { lawyerId });
+      const response = await apiWithTimeout("put", "/users/approve-lawyer", {
+        lawyerId,
+        comments: actionComments || "No comments provided",
+      });
       console.log("Approve lawyer response:", response.data);
+      const endTime = performance.now(); // Debug: Measure end time
+      console.log(`Approve API took ${endTime - startTime}ms`);
+
       toast.success("Lawyer approved successfully", { id: toastId });
-      const updatedLawyers = allLawyersData.filter(l => l._id !== lawyerId);
-      queryClient.setQueryData(['allLawyers'], updatedLawyers);
+      // Invalidate queries to refetch data
+      queryClient.invalidateQueries(["allLawyers"]);
+      queryClient.invalidateQueries(["pendingLawyers"]);
+      setShowActionDialog(null);
+      setActionComments("");
     } catch (error) {
       console.error("Error approving lawyer:", error);
-      const errorMessage = error.response?.data?.message || "Failed to approve lawyer";
+      const errorMessage = error.message || "Failed to approve lawyer";
       toast.error(errorMessage, { id: toastId });
+
+      // Revert optimistic update
+      queryClient.setQueryData(["allLawyers"], previousAllLawyers);
+      queryClient.setQueryData(["pendingLawyers"], previousPendingLawyers);
+    } finally {
+      setLoadingActions((prev) => ({ ...prev, [lawyerId]: null }));
     }
   };
 
   // Handle reject lawyer
   const handleRejectLawyer = async (lawyerId) => {
+    if (!actionComments) {
+      toast.error("Comments are required for rejection");
+      return;
+    }
+    const startTime = performance.now(); // Debug: Measure start time
+    setLoadingActions((prev) => ({ ...prev, [lawyerId]: "reject" }));
     const toastId = toast.loading("Rejecting lawyer...");
+
+    // Optimistic update
+    const previousAllLawyers = queryClient.getQueryData(["allLawyers"]);
+    const previousPendingLawyers = queryClient.getQueryData(["pendingLawyers"]);
+    queryClient.setQueryData(["allLawyers"], (old) => {
+      const index = old.findIndex((l) => l._id === lawyerId);
+      if (index === -1) return old;
+      const newData = [...old];
+      newData[index] = {
+        ...newData[index],
+        status: "Rejected",
+        verificationStatus: "Rejected",
+      };
+      return newData;
+    });
+    queryClient.setQueryData(["pendingLawyers"], (old) =>
+      old.filter((l) => l._id !== lawyerId)
+    );
+
     try {
-      const response = await api.put("/users/reject-lawyer", { lawyerId });
+      const response = await apiWithTimeout("put", "/users/reject-lawyer", {
+        lawyerId,
+        comments: actionComments,
+      });
       console.log("Reject lawyer response:", response.data);
+      const endTime = performance.now(); // Debug: Measure end time
+      console.log(`Reject API took ${endTime - startTime}ms`);
+
       toast.success("Lawyer rejected successfully", { id: toastId });
-      const updatedLawyers = allLawyersData.filter(l => l._id !== lawyerId);
-      queryClient.setQueryData(['allLawyers'], updatedLawyers);
+      // Invalidate queries to refetch data
+      queryClient.invalidateQueries(["allLawyers"]);
+      queryClient.invalidateQueries(["pendingLawyers"]);
+      setShowActionDialog(null);
+      setActionComments("");
     } catch (error) {
       console.error("Error rejecting lawyer:", error);
-      const errorMessage = error.response?.data?.message || "Failed to reject lawyer";
+      const errorMessage = error.message || "Failed to reject lawyer";
       toast.error(errorMessage, { id: toastId });
+
+      // Revert optimistic update
+      queryClient.setQueryData(["allLawyers"], previousAllLawyers);
+      queryClient.setQueryData(["pendingLawyers"], previousPendingLawyers);
+    } finally {
+      setLoadingActions((prev) => ({ ...prev, [lawyerId]: null }));
     }
   };
 
@@ -281,6 +428,77 @@ function ReviewerDashboardContent() {
     logout();
     navigate("/login");
   };
+
+  // Action Dialog for Approve/Reject
+  const ActionDialog = ({ lawyer, action }) => (
+    <Dialog
+      open={showActionDialog === `${lawyer._id}-${action}`}
+      onOpenChange={() => {
+        setShowActionDialog(null);
+        setActionComments("");
+      }}
+    >
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>
+            {action === "approve" ? "Approve" : "Reject"} Lawyer: {lawyer.username || lawyer.name}
+          </DialogTitle>
+        </DialogHeader>
+        <div className="py-4">
+          <label className="block text-sm font-medium mb-1">
+            Comments {action === "reject" ? "(Required)" : "(Optional)"}
+          </label>
+          <div className="ltr-wrapper">
+            <textarea
+              value={actionComments}
+              onChange={(e) => setActionComments(e.target.value)}
+              className="w-full p-2 border rounded-md comment-textarea"
+              style={{ direction: "ltr", textAlign: "left", unicodeBidi: "normal", writingMode: "horizontal-tb" }}
+              lang="en"
+              dir="ltr"
+              rows={4}
+              placeholder={
+                action === "reject"
+                  ? "Please provide a reason for rejection"
+                  : "Enter any comments (optional)"
+              }
+            />
+          </div>
+        </div>
+        <DialogFooter>
+          <Button
+            variant="outline"
+            onClick={() => {
+              setShowActionDialog(null);
+              setActionComments("");
+            }}
+          >
+            Cancel
+          </Button>
+          <Button
+            onClick={() => {
+              if (action === "reject" && !actionComments.trim()) {
+                toast.error("Comments are required for rejection");
+                return;
+              }
+              if (action === "approve") {
+                handleApproveLawyer(lawyer._id);
+              } else {
+                handleRejectLawyer(lawyer._id);
+              }
+            }}
+            disabled={loadingActions[lawyer._id]}
+          >
+            {loadingActions[lawyer._id] ? (
+              <span className="animate-spin">⌛</span>
+            ) : (
+              "Confirm"
+            )}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
 
   // Show error state
   if (lawyersError) {
@@ -300,23 +518,22 @@ function ReviewerDashboardContent() {
 
   return (
     <div className="min-h-screen bg-background flex">
+      {/* Inline styles for textarea */}
+      <style>{styles}</style>
+
       {/* Header */}
       <header className="bg-card border-b h-16 fixed top-0 left-0 right-0 flex items-center justify-between px-4 z-10">
         <div className="flex items-center">
           <h1 className="text-xl font-semibold">Legal Reviewer Dashboard</h1>
         </div>
-        
+
         <div className="flex items-center gap-2">
           <div className="flex items-center gap-2">
             <div className="hidden md:block text-right">
               <p className="text-sm font-medium">{user?.username}</p>
               <p className="text-xs text-muted-foreground">{user?.role}</p>
             </div>
-            <Button 
-              variant="ghost" 
-              size="icon"
-              onClick={handleLogout}
-            >
+            <Button variant="ghost" size="icon" onClick={handleLogout}>
               <LogOut className="h-5 w-5" />
             </Button>
           </div>
@@ -327,7 +544,7 @@ function ReviewerDashboardContent() {
       <main className="flex-1 p-4 md:p-6 mt-16">
         <div className="max-w-7xl mx-auto space-y-6">
           <h2 className="text-2xl font-bold text-navy">Legal Reviewer Dashboard</h2>
-          
+
           {/* Stats Cards - Position Pending Approval to the right */}
           <div className="flex justify-end">
             <div className="w-full max-w-md">
@@ -342,7 +559,7 @@ function ReviewerDashboardContent() {
               </Card>
             </div>
           </div>
-          
+
           {/* Filters and Search */}
           <Card>
             <CardContent className="pt-6">
@@ -356,7 +573,7 @@ function ReviewerDashboardContent() {
                     className="w-full px-3 py-2 border rounded-md"
                   />
                 </div>
-                
+
                 <div className="flex gap-2">
                   <select
                     value={statusFilter}
@@ -368,7 +585,7 @@ function ReviewerDashboardContent() {
                     <option value="Active">Approved</option>
                     <option value="Rejected">Rejected</option>
                   </select>
-                  
+
                   <select
                     value={sortOrder}
                     onChange={(e) => setSortOrder(e.target.value)}
@@ -379,7 +596,7 @@ function ReviewerDashboardContent() {
                     <option value="name-asc">Name (A-Z)</option>
                     <option value="name-desc">Name (Z-A)</option>
                   </select>
-                  
+
                   <Button variant="outline" onClick={() => refetchLawyers()}>
                     Refresh
                   </Button>
@@ -387,19 +604,19 @@ function ReviewerDashboardContent() {
               </div>
             </CardContent>
           </Card>
-          
+
           {/* Lawyers Table */}
           <Card>
             <CardHeader>
               <CardTitle>Lawyer Applications</CardTitle>
               <CardDescription>
-                {statusFilter === "All" 
-                  ? "All lawyer applications" 
-                  : statusFilter === "Pending" 
-                    ? "Lawyers awaiting approval" 
-                    : statusFilter === "Active" 
-                      ? "Approved lawyers" 
-                      : "Rejected applications"}
+                {statusFilter === "All"
+                  ? "All lawyer applications"
+                  : statusFilter === "Pending"
+                  ? "Lawyers awaiting approval"
+                  : statusFilter === "Active"
+                  ? "Approved lawyers"
+                  : "Rejected applications"}
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -419,6 +636,7 @@ function ReviewerDashboardContent() {
                       <tr className="border-b">
                         <th className="text-left py-3 px-4 font-medium">Name</th>
                         <th className="text-left py-3 px-4 font-medium">Email</th>
+                        <th className="text-left py-3 px-4 font-medium">Specializations</th>
                         <th className="text-left py-3 px-4 font-medium">Status</th>
                         <th className="text-left py-3 px-4 font-medium">License</th>
                         <th className="text-left py-3 px-4 font-medium">Date Applied</th>
@@ -431,19 +649,26 @@ function ReviewerDashboardContent() {
                           <td className="py-3 px-4">{lawyer.username || lawyer.name}</td>
                           <td className="py-3 px-4">{lawyer.email}</td>
                           <td className="py-3 px-4">
-                            <span className={`px-2 py-1 rounded-full text-xs ${
-                              lawyer.status === "Pending" 
-                                ? "bg-yellow-100 text-yellow-800" 
-                                : lawyer.status === "Active" 
+                            {lawyer.specialization?.length
+                              ? lawyer.specialization.join(", ")
+                              : "None"}
+                          </td>
+                          <td className="py-3 px-4">
+                            <span
+                              className={`px-2 py-1 rounded-full text-xs ${
+                                (lawyer.status || "").toLowerCase() === "pending"
+                                  ? "bg-yellow-100 text-yellow-800"
+                                  : (lawyer.status || "").toLowerCase() === "active"
                                   ? "bg-green-100 text-green-800"
                                   : "bg-red-100 text-red-800"
-                            }`}>
+                              }`}
+                            >
                               {lawyer.status || "Unknown"}
                             </span>
                           </td>
                           <td className="py-3 px-4">
                             {lawyer.license_file ? (
-                              <Button 
+                              <Button
                                 onClick={() => handleViewLicense(lawyer.license_file)}
                                 variant="link"
                                 className="text-blue-600 hover:underline flex items-center p-0 h-auto"
@@ -456,37 +681,59 @@ function ReviewerDashboardContent() {
                             )}
                           </td>
                           <td className="py-3 px-4">
-                            {lawyer.createdAt 
-                              ? new Date(lawyer.createdAt).toLocaleDateString() 
+                            {lawyer.createdAt
+                              ? new Date(lawyer.createdAt).toLocaleDateString()
                               : "Unknown"}
                           </td>
                           <td className="py-3 px-4 text-right">
                             <div className="flex justify-end space-x-2">
-                              {lawyer.status === "Pending" && (
+                              {(lawyer.status || "").toLowerCase() === "pending" && (
                                 <>
-                                  <Button 
-                                    onClick={() => handleApproveLawyer(lawyer._id)}
-                                    variant="outline" 
+                                  <Button
+                                    onClick={() =>
+                                      setShowActionDialog(`${lawyer._id}-approve`)
+                                    }
+                                    variant="outline"
                                     size="sm"
+                                    disabled={loadingActions[lawyer._id]}
                                     className="bg-green-50 border-green-200 text-green-700 hover:bg-green-100"
                                   >
-                                    <Check className="h-4 w-4 mr-1" />
-                                    Approve
+                                    {loadingActions[lawyer._id] === "approve" ? (
+                                      <span className="animate-spin">⌛</span>
+                                    ) : (
+                                      <>
+                                        <Check className="h-4 w-4 mr-1" />
+                                        Approve
+                                      </>
+                                    )}
                                   </Button>
-                                  <Button 
-                                    onClick={() => handleRejectLawyer(lawyer._id)}
-                                    variant="outline" 
+                                  <Button
+                                    onClick={() =>
+                                      setShowActionDialog(`${lawyer._id}-reject`)
+                                    }
+                                    variant="outline"
                                     size="sm"
-                                    className="bg-red-50 border-red-200 text-red-700 hover:bg-red-100"
+                                    disabled={loadingActions[lawyer._id]}
+                                    className="bg-red-50 border-red-200 text-red-700 hover:bg-green-100"
                                   >
-                                    <X className="h-4 w-4 mr-1" />
-                                    Reject
+                                    {loadingActions[lawyer._id] === "reject" ? (
+                                      <span className="animate-spin">⌛</span>
+                                    ) : (
+                                      <>
+                                        <X className="h-4 w-4 mr-1" />
+                                        Reject
+                                      </>
+                                    )}
                                   </Button>
+                                  <ActionDialog lawyer={lawyer} action="approve" />
+                                  <ActionDialog lawyer={lawyer} action="reject" />
                                 </>
                               )}
-                              {lawyer.status !== "Pending" && (
+                              {(lawyer.status || "").toLowerCase() !== "pending" && (
                                 <span className="text-sm text-muted-foreground">
-                                  {lawyer.status === "Active" ? "Approved" : "Rejected"}
+                                  {(lawyer.status || "").toLowerCase() === "active"
+                                    ? "Approved"
+                                    : "Rejected"}
                                 </span>
                               )}
                             </div>
@@ -503,10 +750,7 @@ function ReviewerDashboardContent() {
       </main>
 
       {/* License Viewer Dialog */}
-      <Dialog 
-        open={showLicenseDialog} 
-        onOpenChange={setShowLicenseDialog}
-      >
+      <Dialog open={showLicenseDialog} onOpenChange={setShowLicenseDialog}>
         <DialogContent className="max-w-4xl">
           <DialogHeader>
             <DialogTitle>License Document</DialogTitle>
@@ -516,32 +760,46 @@ function ReviewerDashboardContent() {
               <div className="space-y-4">
                 {/* PDF Viewer */}
                 <div className="w-full h-[70vh] border rounded-md overflow-hidden bg-gray-100">
-                  <iframe 
-                    src={selectedLicense} 
-                    className="w-full h-full" 
+                  <iframe
+                    src={selectedLicense}
+                    className="w-full h-full"
                     title="License Document"
+                    onError={(e) => {
+                      console.error("Error loading license file:", e);
+                      e.target.style.display = "none";
+                      e.target.parentNode.innerHTML += `
+                        <div class="flex flex-col items-center justify-center h-full p-4">
+                          <AlertTriangle className="h-12 w-12 text-amber-500 mb-4" />
+                          <p class="text-center text-gray-700">
+                            Failed to load the license file. The file might not exist or you may not have permission to view it.
+                          </p>
+                        </div>
+                      `;
+                    }}
                   />
                 </div>
-                
+
                 {/* Show file URL for debugging */}
                 <div className="p-2 bg-gray-100 rounded text-sm">
-                  <p><strong>File URL:</strong> {selectedLicense}</p>
+                  <p>
+                    <strong>File URL:</strong> {selectedLicense}
+                  </p>
                 </div>
-                
+
                 {/* Direct link as fallback */}
                 <div className="text-center">
-                  <a 
-                    href={selectedLicense} 
-                    target="_blank" 
+                  <a
+                    href={selectedLicense}
+                    target="_blank"
                     rel="noopener noreferrer"
                     className="text-blue-600 hover:underline"
                   >
                     Open in new tab if not displaying correctly
                   </a>
                 </div>
-                
+
                 {/* Download button */}
-                <Button 
+                <Button
                   onClick={downloadLicenseFile}
                   className="w-full bg-blue-600 hover:bg-blue-700 text-white"
                 >

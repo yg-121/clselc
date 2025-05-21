@@ -1,41 +1,45 @@
 import {
-  BrowserRouter as Router,
   Routes,
   Route,
   Navigate,
   useLocation,
 } from "react-router-dom";
-import  {AuthProvider}  from "./context/AuthContext";
-import {useAuth} from "./hooks/authHooks"
-import Navbar from "./components/layout/Navbar";
-import Footer from "./components/layout/Footer";
-import Login from "./pages/auth/Login";
-import Register from "./pages/auth/Register";
-import ForgotPassword from "./pages/auth/ForgotPassword";
-import ResetPassword from "./pages/auth/ResetPassword";
-import ClientHome from "./pages/client/ClientHome";
-import FindLawyers from "./pages/client/FindLawyer";
-import MyCases from "./pages/client/MyCases";
-import CaseDetails from "./pages/client/CaseDetails";
-import PostCase from "./pages/client/PostCases";
-import ClientLawyerProfile from "./pages/client/clientLawyer";
-import Notification from "./pages/client/Notifications";
-import AppointmentsPage from "./pages/common/Appointments";
-import LawyerHome from "./pages/lawyer/LawyerHome";
-import CaseOnHandDetails from "./pages/lawyer/CaseOnHandDetails";
-import LawyerAllCases from "./pages/lawyer/LawyerAllCases";
-import LawyerCase from "./pages/lawyer/LawyerCase";
-import LawyerCaseDetails from "./pages/lawyer/LawyerCaseDetails";
-import CaseAnalytics from "./pages/lawyer/CaseAnalytics";
-import MyBids from "./pages/lawyer/MyBids";
-import LawyerProfile from "./pages/lawyer/LawyerProfile";
-import AdminDashboard from "./components/dashboard/AdminDashboard";
-import MessagesPage from "./pages/common/Messages";
-import LegalReviewerDashboard from "./pages/dashboard/LegalReviewerDashboard";
+import { AuthProvider } from "./context/AuthContext.jsx";
+import { useAuth } from "./hooks/authHooks.js";
+import Navbar from "./components/layout/Navbar.jsx";
+import Footer from "./components/layout/Footer.jsx";
+
+import Login from "./pages/auth/Login.jsx";
+import Register from "./pages/auth/Register.jsx";
+import ForgotPassword from "./pages/auth/ForgotPassword.jsx";
+import ResetPassword from "./pages/auth/ResetPassword.jsx";
+
+import ClientHome from "./pages/client/ClientHome.jsx";
+import FindLawyers from "./pages/client/FindLawyer.jsx";
+import MyCases from "./pages/client/MyCases.jsx";
+import CaseDetails from "./pages/client/CaseDetails.jsx";
+import PostCase from "./pages/client/PostCases.jsx";
+import ClientLawyerProfile from "./pages/client/clientLawyer.jsx";
+import Notification from "./pages/client/Notifications.jsx";
+
+import AppointmentsPage from "./pages/common/Appointments.jsx";
+import MessagesPage from "./pages/common/Messages.jsx";
+
+import LawyerHome from "./pages/lawyer/LawyerHome.jsx";
+import CaseOnHandDetails from "./pages/lawyer/CaseOnHandDetails.jsx";
+import LawyerAllCases from "./pages/lawyer/LawyerAllCases.jsx";
+import LawyerCase from "./pages/lawyer/LawyerCase.jsx";
+import LawyerCaseDetails from "./pages/lawyer/LawyerCaseDetails.jsx";
+import CaseAnalytics from "./pages/lawyer/CaseAnalytics.jsx";
+import MyBids from "./pages/lawyer/MyBids.jsx";
+import LawyerProfile from "./pages/lawyer/LawyerProfile.jsx";
+
+import AdminDashboard from "./components/dashboard/AdminDashboard.jsx";
+import LegalReviewerDashboard from "./pages/dashboard/LegalReviewerDashboard.jsx";
+
 import { Toaster } from 'react-hot-toast';
+
 // Not Found Component
-
-
 const NotFound = () => {
   return (
     <div className="flex flex-col items-center justify-center min-h-screen bg-gray-100">
@@ -55,12 +59,10 @@ const NotFound = () => {
   );
 };
 
-
-
 // Protected route component
 const ProtectedRoute = ({ children, allowedRoles }) => {
   const { user, loading } = useAuth();
-  
+
   if (loading) {
     return (
       <div className="flex justify-center items-center h-screen">
@@ -70,22 +72,22 @@ const ProtectedRoute = ({ children, allowedRoles }) => {
   }
 
   if (!user) {
-    return <Navigate to="/login" />;
+    return <Navigate to="/login" replace />;
   }
 
-  if (allowedRoles && !allowedRoles.includes(user.role)) {
-    // Redirect to appropriate dashboard based on role
-    if (user.role === "Client") {
-      return <Navigate to="/client/home" replace />;
-    } else if (user.role === "Lawyer") {
-      return <Navigate to="/lawyer/home" replace />;
-    } else if (user.role === "Admin") {
-      return <Navigate to="/dashboard/admin" replace />;
-    } else if (user.role === "LegalReviewer") {
-      return <Navigate to="/dashboard/reviewer" replace />;
-    } else {
-      // Fallback to login if role is unknown
-      return <Navigate to="/login" replace />;
+  if (allowedRoles && user.role && !allowedRoles.includes(user.role)) {
+    // Redirect based on user role
+    switch (user.role) {
+      case "Client":
+        return <Navigate to="/client/home" replace />;
+      case "Lawyer":
+        return <Navigate to="/lawyer/home" replace />;
+      case "Admin":
+        return <Navigate to="/dashboard/admin" replace />;
+      case "LegalReviewer":
+        return <Navigate to="/dashboard/reviewer" replace />;
+      default:
+        return <Navigate to="/login" replace />;
     }
   }
 
@@ -98,7 +100,6 @@ function AppRoutes() {
   const isAdminRoute = location.pathname.startsWith('/dashboard/admin');
   const hideNavbarFooter = authRoutes.includes(location.pathname) || isAdminRoute;
 
-  // For admin routes, render without the standard layout
   if (isAdminRoute) {
     return (
       <Routes>
@@ -114,7 +115,6 @@ function AppRoutes() {
     );
   }
 
-  // For non-admin routes, use the standard layout with navbar and footer
   return (
     <div className="flex flex-col min-h-screen">
       {!hideNavbarFooter && <Navbar />}
@@ -125,9 +125,8 @@ function AppRoutes() {
           <Route path="/register" element={<Register />} />
           <Route path="/forgot-password" element={<ForgotPassword />} />
           <Route path="/reset-password" element={<ResetPassword />} />
-          {/* Dashboard Routes */}
           <Route
-            path="client/home"
+            path="/client/home"
             element={
               <ProtectedRoute allowedRoles={["Client"]}>
                 <ClientHome />
@@ -135,7 +134,7 @@ function AppRoutes() {
             }
           />
           <Route
-            path="client/lawyer"
+            path="/client/lawyer"
             element={
               <ProtectedRoute allowedRoles={["Client"]}>
                 <FindLawyers />
@@ -143,7 +142,7 @@ function AppRoutes() {
             }
           />
           <Route
-            path="client/cases"
+            path="/client/cases"
             element={
               <ProtectedRoute allowedRoles={["Client"]}>
                 <MyCases />
@@ -151,7 +150,7 @@ function AppRoutes() {
             }
           />
           <Route
-            path="client/cases/:id"
+            path="/client/cases/:id"
             element={
               <ProtectedRoute allowedRoles={["Client"]}>
                 <CaseDetails />
@@ -185,7 +184,7 @@ function AppRoutes() {
           <Route
             path="/client/notification"
             element={
-              <ProtectedRoute allowedRoles={["Lawyer"]}>
+              <ProtectedRoute allowedRoles={["Client"]}>
                 <Notification />
               </ProtectedRoute>
             }
@@ -193,12 +192,11 @@ function AppRoutes() {
           <Route
             path="/client/lawyer/:lawyerId"
             element={
-              <ProtectedRoute allowedRoles={["Lawyer"]}>
+              <ProtectedRoute allowedRoles={["Client"]}>
                 <ClientLawyerProfile />
               </ProtectedRoute>
             }
           />
-          {/* Lawyer route */}
           <Route
             path="/lawyer/home"
             element={
@@ -305,17 +303,11 @@ function AppRoutes() {
 
 function App() {
   return (
-    <Router>
-      <AuthProvider>
-        <Toaster position="top-right" />
-        <AppRoutes />
-      </AuthProvider>
-    </Router>
+    <AuthProvider>
+      <Toaster position="top-right" />
+      <AppRoutes />
+    </AuthProvider>
   );
 }
 
 export default App;
-
-
-
-

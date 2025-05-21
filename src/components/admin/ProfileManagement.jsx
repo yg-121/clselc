@@ -1,10 +1,10 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { useAuth } from "../../context/AuthContext"
-import { useApi } from "../../hooks/useApi"
-import Button from "../common/Button"
-import Input from "../common/Input"
+import { useAuth } from "../../context/AuthContex.jsx"
+import { useApi } from "../../hooks/useApi.jsx"
+import Button from "../common/Button.jsx"
+import Input from "../common/Input.jsx"
 
 export default function ProfileManagement() {
   const { user } = useAuth()

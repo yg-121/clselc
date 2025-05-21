@@ -1,6 +1,6 @@
 import { io } from "socket.io-client";
 
-// Make sure we're using the correct URL
+// Make sure the socket URL is correct
 const SOCKET_URL = import.meta.env.VITE_API_URL || "http://localhost:5000";
 let socket = null;
 
@@ -14,13 +14,13 @@ export const connectSocket = (userId) => {
         auth: {
           userId,
         },
-        // Try polling first, then websocket
-        transports: ["polling", "websocket"],
+        // Use both transports but start with websocket
+        transports: ["websocket", "polling"],
         reconnectionAttempts: 5,
         reconnectionDelay: 1000,
         reconnectionDelayMax: 5000,
         timeout: 20000,
-        // Add path if your server uses a specific path
+        // Make sure path matches server configuration
         path: "/socket.io/",
       });
 
@@ -29,9 +29,18 @@ export const connectSocket = (userId) => {
       });
 
       socket.on("connect_error", (err) => {
-        console.error("❌ Socket.IO connection error:", err.message);
+        console.error("Socket connection error:", err);
+        // More detailed error logging
+        if (err.message) {
+          console.error("Error message:", err.message);
+        }
+        if (err.description) {
+          console.error("Error description:", err.description);
+        }
+        
         // Don't keep trying to reconnect if there's an auth error
-        if (err.message.includes("authentication")) {
+        if (err.message && err.message.includes("authentication")) {
+          console.error("Authentication error, disconnecting socket");
           socket.disconnect();
           socket = null;
         }

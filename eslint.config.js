@@ -27,7 +27,7 @@ export default [
     settings: {
       "import/resolver": {
         node: {
-          extensions: [".js", ".jsx"],
+          extensions: [".js", ".jsx", ".mjs"],
         },
       },
     },
@@ -40,7 +40,16 @@ export default [
         { allowConstantExport: true },
       ],
       "import/no-unresolved": "error",
-      "import/extensions": ["error", "always", { js: "never", jsx: "never" }],
+      "import/extensions": [
+        "error",
+        "always",
+        {
+          js: "never",
+          jsx: "never",
+          mjs: "never",
+          ignorePackages: true
+        }
+      ],
     },
   },
 ];
