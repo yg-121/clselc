@@ -2,10 +2,8 @@ import { createContext, useContext, useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import api from "../services/api.js";
 
-// Create the context
 export const AuthContext = createContext();
 
-// Provider component
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [token, setToken] = useState(null);
@@ -22,14 +20,23 @@ export const AuthProvider = ({ children }) => {
       if (storedToken && storedUserId && storedRole) {
         try {
           api.defaults.headers.common["Authorization"] = `Bearer ${storedToken}`;
-          // Fix the API endpoint path to match backend routes
-          const response = await api.get(`/users/${storedUserId}`);
+          let response;
+          if (storedRole === 'Client') {
+            response = await api.get('/users/client/profile');
+          } else if (storedRole === 'Lawyer') {
+            response = await api.get(`/users/lawyers/${storedUserId}`);
+          } else if (storedRole === 'Admin') {
+            response = await api.get('/users/admin/profile');
+          } else {
+            throw new Error('Invalid role');
+          }
           console.log("User fetch response:", response.data);
+          const userData = storedRole === 'Lawyer' ? response.data.lawyer : response.data.user;
           setUser({
-            _id: response.data.user._id,
-            username: response.data.user.username,
-            role: response.data.user.role,
-            status: response.data.user.status,
+            _id: userData._id,
+            username: userData.username,
+            role: userData.role,
+            status: userData.status,
           });
           setToken(storedToken);
         } catch (err) {
@@ -151,7 +158,6 @@ export const AuthProvider = ({ children }) => {
   );
 };
 
-// Hook to use the context
 export const useAuth = () => {
   const context = useContext(AuthContext);
   if (!context) {

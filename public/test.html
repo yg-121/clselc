@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Socket.IO Test</title>
+  <script src="http://localhost:5000/socket.io/socket.io.js"></script>
+</head>
+<body>
+  <script>
+    const socket = io('http://localhost:5000', {
+      path: '/socket.io',
+      auth: {
+        token: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjY4MWNhNzc4NDdkYTk5ZGRkMjY1MGI4NiIsInJvbGUiOiJMYXd5ZXIiLCJzdGF0dXMiOiJBY3RpdmUiLCJpYXQiOjE3NDc4NDIxOTgsImV4cCI6MTc0NzkyODU5OH0.bdVptViKh_s4oa3JW2Lw0rPORWvuhaVpAAbXAK18NCU', // Lawyer’s JWT
+        userId: '681ca77847da99ddd2650b86' // Lawyer’s user ID
+      }
+    });
+    socket.on('connect', () => console.log('Connected:', socket.id));
+    socket.on('connect_error', (err) => console.error('Connect error:', err.message));
+    socket.on('new_message', (msg) => console.log('New message:', msg));
+  </script>
+</body>
+</html>

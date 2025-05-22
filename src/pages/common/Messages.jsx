@@ -1,502 +1,290 @@
-import React, { useState, useEffect, useRef } from "react";
-import { useNavigate } from "react-router-dom";
-import { useAuth } from "../../hooks/authHooks.js";
-import api from "../../services/api.js";
-import socketService from "../../services/socket.js";
-import { toast } from "react-hot-toast";
-import { format } from "date-fns";
-import { FiSend, FiPaperclip, FiTrash2, FiLock, FiUnlock, FiX, FiArrowLeft } from "react-icons/fi";
+import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../../hooks/authHooks.js';
+import { useApi } from '../../hooks/useApi.js';
+import { chat } from '../../services/api.js';
+import socketService from '../../services/socket.js';
+import { toast } from 'react-hot-toast';
 
 const Messages = () => {
-  const [chats, setChats] = useState([]);
-  const [selectedChat, setSelectedChat] = useState(null);
-  const [messages, setMessages] = useState([]);
-  const [newMessage, setNewMessage] = useState("");
-  const [file, setFile] = useState(null);
-  const [blockedUsers, setBlockedUsers] = useState([]);
-  const [isLoading, setIsLoading] = useState(false);
-  const [showUserModal, setShowUserModal] = useState(false);
-  const [availableUsers, setAvailableUsers] = useState([]);
-  const [isChatOpen, setIsChatOpen] = useState(false);
-  const { user, token, loading: authLoading } = useAuth();
+  const { user, loading: authLoading, error: authError } = useAuth();
+  const { loading, error, callApi } = useApi();
+  const [selectedUser, setSelectedUser] = useState('');
+  const [message, setMessage] = useState('');
+  const [chatHistory, setChatHistory] = useState([]);
+  const [recentChats, setRecentChats] = useState([]);
   const navigate = useNavigate();
-  const messagesEndRef = useRef(null);
-  const fileInputRef = useRef(null);
-  const socketRef = useRef(null);
 
   useEffect(() => {
-    if (!authLoading && (!user || !token)) {
-      toast.error("Please log in to view messages");
-      navigate("/login");
-    }
-  }, [user, token, authLoading, navigate]);
-
-  useEffect(() => {
-    if (!user || !token || authLoading) return;
-
-    socketRef.current = socketService.getSocket();
-    if (!socketRef.current) {
-      socketService.initialize(user._id);
-      socketRef.current = socketService.getSocket();
+    if (authLoading) return;
+    if (!user) {
+      navigate('/login');
+      return;
     }
 
-    fetchChats();
-
-    socketRef.current.on("newChat", (chat) => {
-      fetchChats();
-    });
-
-    socketRef.current.on("new_message", (message) => {
-      if (message.sender._id === selectedChat?.userId || message.receiver._id === selectedChat?.userId) {
-        setMessages((prev) => [...prev, message]);
+    const fetchRecentChats = async () => {
+      try {
+        const response = await callApi(() => chat.getChatHistory(user._id));
+        if (!response.success || !response.data?.chats) {
+          setRecentChats([]);
+          return;
+        }
+        const uniqueUsers = new Set();
+        const recent = response.data.chats
+          .map((chat) => ({
+            userId:
+              chat.sender._id === user._id ? chat.receiver._id : chat.sender._id,
+            username:
+              chat.sender._id === user._id
+                ? chat.receiver.username
+                : chat.sender.username,
+            role:
+              chat.sender._id === user._id
+                ? chat.receiver.role
+                : chat.sender.role,
+            lastMessage: chat.message,
+            timestamp: chat.createdAt,
+          }))
+          .filter((chat) => {
+            if (!uniqueUsers.has(chat.userId)) {
+              uniqueUsers.add(chat.userId);
+              return true;
+            }
+            return false;
+          })
+          .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+        setRecentChats(recent);
+      } catch (err) {
+        console.error('[Messages] Fetch recent chats error:', err.response?.data || err.message);
+        toast.error('Failed to load recent chats');
+        setRecentChats([]);
       }
-      fetchChats();
-    });
+    };
 
-    socketRef.current.on("new_notification", (notification) => {
-      toast(notification.message);
-    });
+    fetchRecentChats();
 
-    socketRef.current.on("chatDeleted", (chatId) => {
-      setChats((prev) => prev.filter((chat) => chat._id !== chatId));
-      if (selectedChat?._id === chatId) {
-        setSelectedChat(null);
-        setMessages([]);
-        setIsChatOpen(false);
-      }
-    });
-
-    socketRef.current.on("userBlocked", ({ userId }) => {
-      setBlockedUsers((prev) => [...new Set([...prev, userId])]);
-      toast("User blocked");
-    });
-
-    socketRef.current.on("userUnblocked", ({ userId }) => {
-      setBlockedUsers((prev) => prev.filter((id) => id !== userId));
-      toast("User unblocked");
-    });
+    const socket = socketService.initialize(user._id);
+    if (socket) {
+      socketService.on('new_message', (msg) => {
+        console.log('[Messages] New message:', msg);
+        setChatHistory((prev) => {
+          if (
+            msg.sender._id === selectedUser ||
+            msg.receiver._id === user._id
+          ) {
+            return [...prev, msg];
+          }
+          return prev;
+        });
+        setRecentChats((prev) => {
+          const otherUser =
+            msg.sender._id === user._id ? msg.receiver : msg.sender;
+          const updated = [
+            {
+              userId: otherUser._id,
+              username: otherUser.username,
+              role: otherUser.role,
+              lastMessage: msg.message,
+              timestamp: msg.createdAt,
+            },
+            ...prev.filter((chat) => chat.userId !== otherUser._id),
+          ];
+          return updated.sort(
+            (a, b) => new Date(b.timestamp) - new Date(a.timestamp)
+          );
+        });
+        toast.success(`New message from ${msg.sender.username}`);
+      });
+    }
 
     return () => {
-      socketRef.current?.off("newChat");
-      socketRef.current?.off("new_message");
-      socketRef.current?.off("new_notification");
-      socketRef.current?.off("chatDeleted");
-      socketRef.current?.off("userBlocked");
-      socketRef.current?.off("userUnblocked");
+      socketService.off('new_message');
     };
-  }, [user, token, selectedChat, authLoading]);
+  }, [user, authLoading, navigate]);
 
   useEffect(() => {
-    if (selectedChat) {
-      fetchMessages(selectedChat.userId);
-      markChatAsRead(selectedChat._id);
-    }
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [selectedChat]);
+    if (!selectedUser || !user) return;
 
-  const fetchChats = async () => {
-    try {
-      setIsLoading(true);
-      const res = await api.get(`/chats/history/${user._id}`);
-      const groupedChats = [];
-      const seenPairs = new Set();
-      for (const chat of res.data.chats) {
-        const otherUserId = chat.sender._id === user._id ? chat.receiver._id : chat.sender._id;
-        const pairKey = [user._id, otherUserId].sort().join(":");
-        if (!seenPairs.has(pairKey)) {
-          seenPairs.add(pairKey);
-          groupedChats.push({
-            _id: chat._id,
-            userId: otherUserId,
-            username: chat.sender._id === user._id ? chat.receiver.username : chat.sender.username,
-            lastMessage: chat.message || (chat.file === "file" ? "File sent" : "Voice message"),
-            createdAt: chat.createdAt,
-            unreadCount: chat.read || chat.sender._id === user._id ? 0 : 1,
-          });
-        } else {
-          const existingChat = groupedChats.find((c) => c.userId === otherUserId);
-          if (!chat.read && chat.sender._id !== user._id) {
-            existingChat.unreadCount = (existingChat.unreadCount || 0) + 1;
-          }
-          if (new Date(chat.createdAt) > new Date(existingChat.createdAt)) {
-            existingChat._id = chat._id;
-            existingChat.lastMessage = chat.message || (chat.file === "file" ? "File sent" : "Voice message");
-            existingChat.createdAt = chat.createdAt;
-          }
+    const fetchChatHistory = async () => {
+      try {
+        const response = await callApi(() => chat.getChatHistory(user._id));
+        if (!response.success || !response.data?.chats) {
+          setChatHistory([]);
+          return;
         }
+        const filteredChats = response.data.chats.filter(
+          (chat) =>
+            chat.sender._id === selectedUser || chat.receiver._id === selectedUser
+        );
+        setChatHistory(filteredChats);
+      } catch (error) {
+        console.error('[Messages] Fetch chat history error:', error.response?.data || error.message);
+        toast.error('Failed to load chat history');
+        setChatHistory([]);
       }
-      setChats(groupedChats.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)));
-    } catch (error) {
-      toast.error("Failed to load chats");
-      console.error("Fetch chats error:", error);
-    } finally {
-      setIsLoading(false);
-    }
-  };
+    };
 
-  const fetchMessages = async (userId) => {
-    try {
-      setIsLoading(true);
-      const res = await api.get(`/chats/history/${userId}`);
-      setMessages(res.data.chats);
-    } catch (error) {
-      toast.error("Failed to load messages");
-      console.error("Fetch messages error:", error);
-    } finally {
-      setIsLoading(false);
-    }
-  };
+    fetchChatHistory();
+  }, [selectedUser, user]);
 
-  const fetchAvailableUsers = async () => {
+  const handleSendMessage = async () => {
+    if (!message.trim() || !selectedUser) return;
     try {
-      setIsLoading(true);
-      const endpoint = user.role === "Lawyer" ? "/cases" : "/users/lawyers";
-      const res = await api.get(endpoint);
-      console.log("Available users response:", res.data); // Debug log
-      if (user.role === "Lawyer") {
-        const clients = res.data.cases
-          .filter((c) => c.assigned_lawyer && c.assigned_lawyer._id === user._id)
-          .map((c) => ({
-            _id: c.client._id,
-            username: c.client.username || "Client",
-          }));
-        setAvailableUsers(clients);
-      } else {
-        const lawyers = res.data.lawyers || res.data.users || [];
-        setAvailableUsers(lawyers);
+      const response = await callApi(() =>
+        chat.sendMessage({ receiver: selectedUser, message })
+      );
+      if (!response.success || !response.data?.chat) {
+        throw new Error(response.error || 'Invalid response: No chat data');
       }
-      setShowUserModal(true);
-    } catch (error) {
-      toast.error("Failed to load users");
-      console.error("Fetch users error:", error);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const startChat = async (receiverId) => {
-    try {
-      const res = await api.post("/chats/start", { receiver: receiverId });
-      fetchChats();
-      setSelectedChat({
-        _id: res.data.chat._id,
-        userId: receiverId,
-        username: res.data.chat.receiver.username,
+      console.log('[Messages] Send message response:', response.data);
+      setChatHistory((prev) => [...prev, response.data.chat]);
+      setRecentChats((prev) => {
+        const otherUser = {
+          id: selectedUser,
+          name: response.data.chat.receiver.username,
+          role: response.data.chat.receiver.role,
+        };
+        const updated = [
+          {
+            userId: selectedUser,
+            username: otherUser.name,
+            role: otherUser.role,
+            lastMessage: message,
+            timestamp: new Date(),
+          },
+          ...prev.filter((chat) => chat.userId !== selectedUser),
+        ];
+        return updated.sort(
+          (a, b) => new Date(b.timestamp) - new Date(a.timestamp)
+        );
       });
-      setIsChatOpen(true);
-      socketRef.current.emit("newChat", res.data.chat);
-      toast.success("Chat started");
-      setShowUserModal(false);
+      setMessage('');
+      toast.success('Message sent');
     } catch (error) {
-      toast.error(error.response?.data?.message || "Failed to start chat");
-      console.error("Start chat error:", error);
-    }
-  };
-
-  const sendMessage = async (e) => {
-    e.preventDefault();
-    if (!newMessage.trim() && !file) return;
-
-    const formData = new FormData();
-    formData.append("receiver", selectedChat.userId);
-    if (newMessage.trim()) formData.append("message", newMessage);
-    if (file) formData.append("file", file);
-
-    try {
-      const res = await api.post("/chats/send", formData, {
-        headers: { "Content-Type": "multipart/form-data" },
+      console.error('[Messages] Send message error:', {
+        message: error.message,
+        response: error.response?.data,
+        status: error.response?.status,
       });
-      setMessages((prev) => [...prev, res.data.chat]);
-      setNewMessage("");
-      setFile(null);
-      fileInputRef.current.value = null;
-      socketRef.current.emit("new_message", res.data.chat);
-      fetchChats();
-    } catch (error) {
-      toast.error(error.response?.data?.message || "Failed to send message");
-      console.error("Send message error:", error);
+      toast.error(error.response?.data?.message || error.message || 'Failed to send message');
     }
   };
 
-  const deleteChat = async (chatId) => {
-    if (!window.confirm("Are you sure you want to delete this chat?")) return;
+  const handleMarkAsRead = async (chatId) => {
     try {
-      await api.delete(`/chats/${chatId}`);
-      setChats((prev) => prev.filter((chat) => chat._id !== chatId));
-      if (selectedChat?._id === chatId) {
-        setSelectedChat(null);
-        setMessages([]);
-        setIsChatOpen(false);
+      const response = await callApi(() => chat.markChatAsRead(chatId));
+      if (!response.success) {
+        throw new Error(response.error || 'Failed to mark as read');
       }
-      socketRef.current.emit("chatDeleted", chatId);
-      toast.success("Chat deleted");
+      setChatHistory((prev) =>
+        prev.map((chat) =>
+          chat._id === chatId ? { ...chat, read: true } : chat
+        )
+      );
+      toast.success('Message marked as read');
     } catch (error) {
-      toast.error("Failed to delete chat");
-      console.error("Delete chat error:", error);
+      console.error('[Messages] Mark as read error:', {
+        message: error.message,
+        response: error.response?.data,
+        status: error.response?.status,
+      });
+      toast.error(error.response?.data?.message || 'Failed to mark as read');
     }
   };
-
-  const blockUser = async (userId) => {
-    try {
-      await api.post(`/chats/block/${userId}`);
-      setBlockedUsers((prev) => [...new Set([...prev, userId])]);
-      socketRef.current.emit("userBlocked", { userId });
-    } catch (error) {
-      toast.error("Failed to block user");
-      console.error("Block user error:", error);
-    }
-  };
-
-  const unblockUser = async (userId) => {
-    try {
-      await api.post(`/chats/unblock/${userId}`);
-      setBlockedUsers((prev) => prev.filter((id) => id !== userId));
-      socketRef.current.emit("userUnblocked", { userId });
-    } catch (error) {
-      toast.error("Failed to unblock user");
-      console.error("Unblock user error:", error);
-    }
-  };
-
-  const markChatAsRead = async (chatId) => {
-    try {
-      await api.patch(`/chats/${chatId}/read`);
-      fetchChats();
-    } catch (error) {
-      console.error("Mark chat as read error:", error);
-    }
-  };
-
-  const handleFileChange = (e) => {
-    const selectedFile = e.target.files[0];
-    if (selectedFile) {
-      if (selectedFile.size > 10 * 1024 * 1024) {
-        toast.error("File size exceeds 10MB");
-        return;
-      }
-      const allowedTypes = [".pdf", ".doc", ".docx", ".jpg", ".png", ".mp3", ".wav"];
-      const ext = selectedFile.name.slice(selectedFile.name.lastIndexOf(".")).toLowerCase();
-      if (!allowedTypes.includes(ext)) {
-        toast.error("Only PDF, DOC, DOCX, JPG, PNG, MP3, and WAV files are allowed");
-        return;
-      }
-      setFile(selectedFile);
-    }
-  };
-
-  const canStartChat = (receiverId) => {
-    if (user.role === "Client") return true;
-    return availableUsers.some((u) => u._id === receiverId);
-  };
-
-  const handleSelectChat = (chat) => {
-    setSelectedChat(chat);
-    setIsChatOpen(true);
-  };
-
-  if (authLoading || !user || !token) {
-    return null;
-  }
 
   return (
-    <div className="flex h-screen bg-gray-100 font-sans">
-      <div
-        className={`w-full md:w-1/3 bg-white border-r border-gray-200 flex flex-col ${
-          isChatOpen ? "hidden md:flex" : "flex"
-        }`}
-      >
-        <div className="p-4 border-b border-gray-200">
-          <h2 className="text-2xl font-bold text-gray-800">Messages</h2>
-          <button
-            onClick={fetchAvailableUsers}
-            className="mt-2 w-full bg-indigo-600 text-white py-2 px-4 rounded-md hover:bg-indigo-700"
-          >
-            Start New Chat
-          </button>
-        </div>
-        <div className="flex-1 overflow-y-auto">
-          {isLoading && <p className="p-4 text-gray-500">Loading chats...</p>}
-          {chats.length === 0 && !isLoading && (
-            <p className="p-4 text-gray-500">No chats available</p>
-          )}
-          {chats.map((chat) => (
-            <div
-              key={chat._id}
-              onClick={() => handleSelectChat(chat)}
-              className={`p-4 border-b border-gray-200 cursor-pointer hover:bg-gray-50 ${
-                selectedChat?._id === chat._id ? "bg-gray-100" : ""
-              }`}
-            >
-              <div className="flex justify-between">
-                <div>
-                  <p className="font-medium text-gray-800">{chat.username}</p>
-                  <p className="text-sm text-gray-500 truncate">{chat.lastMessage}</p>
+    <div className="container mx-auto p-4 min-h-screen">
+      <h2 className="text-2xl font-bold mb-4">Messages</h2>
+      {(authError || error) && <div className="text-red-500 mb-4">{authError || error}</div>}
+      {authLoading || loading ? (
+        <div>Loading...</div>
+      ) : (
+        <div className="flex gap-4 h-[calc(100vh-8rem)]">
+          <div className="w-1/4 bg-gray-100 p-4 rounded-lg shadow">
+            <h3 className="text-lg font-semibold mb-2">Conversations</h3>
+            {recentChats.length === 0 ? (
+              <div>No conversations yet</div>
+            ) : (
+              recentChats.map((chat) => (
+                <div
+                  key={chat.userId}
+                  className={`p-2 cursor-pointer rounded ${
+                    selectedUser === chat.userId
+                      ? 'bg-blue-200'
+                      : 'hover:bg-gray-200'
+                  }`}
+                  onClick={() => setSelectedUser(chat.userId)}
+                >
+                  <p className="font-semibold">
+                    {chat.username} ({chat.role})
+                  </p>
+                  <p className="text-sm text-gray-600 truncate">
+                    {chat.lastMessage}
+                  </p>
                 </div>
-                <div className="text-sm text-gray-500">
-                  {format(new Date(chat.createdAt), "MMM d, HH:mm")}
-                  {chat.unreadCount > 0 && (
-                    <span className="ml-2 bg-indigo-600 text-white text-xs rounded-full px-2 py-1">
-                      {chat.unreadCount}
-                    </span>
+              ))
+            )}
+          </div>
+          <div className="w-3/4 flex flex-col bg-white rounded-lg shadow">
+            {selectedUser ? (
+              <>
+                <div className="flex-1 p-4 overflow-y-auto max-h-[500px]">
+                  {chatHistory.length === 0 ? (
+                    <p className="text-gray-600">No messages yet</p>
+                  ) : (
+                    chatHistory.map((chat) => (
+                      <div
+                        key={chat._id}
+                        className={`p-3 my-2 rounded-lg ${
+                          chat.sender._id === user._id
+                            ? 'ml-8 bg-blue-100'
+                            : 'mr-8 bg-gray-100'
+                        }`}
+                      >
+                        <p className="font-semibold">
+                          {chat.sender.username}: {chat.message}
+                        </p>
+                        <p className="text-sm text-gray-500">
+                          {new Date(chat.createdAt).toLocaleString()}
+                          {chat.read ? ' · Read' : ' · Unread'}
+                          {chat.receiver._id === user._id && !chat.read && (
+                            <button
+                              onClick={() => handleMarkAsRead(chat._id)}
+                              className="ml-2 text-blue-600 hover:underline"
+                            >
+                              Mark as Read
+                            </button>
+                          )}
+                        </p>
+                      </div>
+                    ))
                   )}
                 </div>
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      <div
-        className={`w-full md:w-2/3 flex flex-col ${
-          isChatOpen ? "flex" : "hidden md:flex"
-        }`}
-      >
-        {selectedChat ? (
-          <>
-            <div className="p-4 bg-white border-b border-gray-200 flex items-center justify-between">
-              <div className="flex items-center">
-                <button
-                  onClick={() => setIsChatOpen(false)}
-                  className="md:hidden mr-2 text-gray-600"
-                >
-                  <FiArrowLeft size={24} />
-                </button>
-                <h3 className="text-lg font-medium text-gray-800">{selectedChat.username}</h3>
-              </div>
-              <div className="flex space-x-2">
-                {blockedUsers.includes(selectedChat.userId) ? (
-                  <button
-                    onClick={() => unblockUser(selectedChat.userId)}
-                    className="text-gray-600 hover:text-indigo-600"
-                  >
-                    <FiUnlock size={20} />
-                  </button>
-                ) : (
-                  <button
-                    onClick={() => blockUser(selectedChat.userId)}
-                    className="text-gray-600 hover:text-indigo-600"
-                  >
-                    <FiLock size={20} />
-                  </button>
-                )}
-                <button
-                  onClick={() => deleteChat(selectedChat._id)}
-                  className="text-gray-600 hover:text-red-600"
-                >
-                  <FiTrash2 size={20} />
-                </button>
-              </div>
-            </div>
-            <div className="flex-1 p-4 overflow-y-auto bg-gray-50">
-              {isLoading && <p className="text-gray-500">Loading messages...</p>}
-              {messages.map((msg) => (
-                <div
-                  key={msg._id}
-                  className={`mb-4 flex ${
-                    msg.sender._id === user._id ? "justify-end" : "justify-start"
-                  }`}
-                >
-                  <div
-                    className={`max-w-xs p-3 rounded-lg ${
-                      msg.sender._id === user._id
-                        ? "bg-indigo-600 text-white"
-                        : "bg-white text-gray-800 border border-gray-200"
-                    }`}
-                  >
-                    {msg.message && <p>{msg.message}</p>}
-                    {msg.file && (
-                      <a
-                        href={msg.file}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-sm underline"
-                      >
-                        {msg.file.split("/").pop()}
-                      </a>
-                    )}
-                    <p className="text-xs mt-1 opacity-75">
-                      {format(new Date(msg.createdAt), "MMM d, HH:mm")}
-                    </p>
+                <div className="p-4 border-t">
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={message}
+                      onChange={(e) => setMessage(e.target.value)}
+                      placeholder="Type a message..."
+                      className="flex-1 p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
+                    />
+                    <button
+                      onClick={handleSendMessage}
+                      disabled={loading}
+                      className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
+                    >
+                      Send
+                    </button>
                   </div>
                 </div>
-              ))}
-              <div ref={messagesEndRef} />
-            </div>
-            {!blockedUsers.includes(selectedChat.userId) && (
-              <form onSubmit={sendMessage} className="p-4 bg-white border-t border-gray-200">
-                <div className="flex items-center space-x-2">
-                  <input
-                    type="text"
-                    value={newMessage}
-                    onChange={(e) => setNewMessage(e.target.value)}
-                    placeholder="Type a message..."
-                    className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
-                  />
-                  <input
-                    type="file"
-                    ref={fileInputRef}
-                    onChange={handleFileChange}
-                    className="hidden"
-                    accept=".pdf,.doc,.docx,.jpg,.png,.mp3,.wav"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => fileInputRef.current.click()}
-                    className="text-gray-600 hover:text-indigo-600"
-                  >
-                    <FiPaperclip size={20} />
-                  </button>
-                  <button
-                    type="submit"
-                    className="bg-indigo-600 text-white p-2 rounded-md hover:bg-indigo-700"
-                  >
-                    <FiSend size={20} />
-                  </button>
-                </div>
-                {file && (
-                  <p className="mt-2 text-sm text-gray-600">Selected file: {file.name}</p>
-                )}
-              </form>
-            )}
-          </>
-        ) : (
-          <div className="flex-1 flex items-center justify-center text-gray-500">
-            Select a chat to start messaging
-          </div>
-        )}
-      </div>
-
-      {showUserModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center">
-          <div className="bg-white p-6 rounded-lg w-full max-w-md">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-lg font-medium text-gray-800">Select User</h3>
-              <button
-                onClick={() => setShowUserModal(false)}
-                className="text-gray-600 hover:text-gray-800"
-              >
-                <FiX size={20} />
-              </button>
-            </div>
-            {availableUsers.length === 0 && (
-              <p className="text-gray-500">No users available</p>
-            )}
-            {availableUsers.map((u) => (
-              <div
-                key={u._id}
-                className="p-2 border-b border-gray-200 flex justify-between items-center"
-              >
-                <p className="text-gray-800">{u.username}</p>
-                {canStartChat(u._id) && !blockedUsers.includes(u._id) && (
-                  <button
-                    onClick={() => startChat(u._id)}
-                    className="bg-indigo-600 text-white py-1 px-3 rounded-md hover:bg-indigo-700"
-                  >
-                    Start Chat
-                  </button>
-                )}
+              </>
+            ) : (
+              <div className="flex-1 flex items-center justify-center">
+                <p className="text-gray-600">Select a conversation to start chatting</p>
               </div>
-            ))}
+            )}
           </div>
         </div>
       )}

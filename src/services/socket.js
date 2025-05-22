@@ -1,104 +1,73 @@
-import { io } from "socket.io-client"
+import io from 'socket.io-client';
 
-// Socket singleton
-let socket = null
+const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || 'http://localhost:5000';
+let socket = null;
 
-// Socket service
-const socketService = {
-  // Initialize socket connection
+export const socketService = {
   initialize(userId) {
-    if (!socket) {
-      try {
-        // Get authentication token
-        const token = localStorage.getItem("token")
-        
-        if (!token) {
-          console.error("No authentication token found")
-          return null
-        }
-        
-        // Use absolute URL instead of relative URL
-        const socketUrl = import.meta.env.VITE_API_URL || "http://localhost:5000"
-        
-        console.log(`Initializing socket connection to ${socketUrl}`)
-        
-        // Create socket with proper configuration
-        socket = io(socketUrl, {
-          path: "/socket.io",
-          auth: {
-            token,
-            userId
-          },
-          transports: ["websocket", "polling"],
-          reconnectionAttempts: 5,
-          reconnectionDelay: 1000,
-          timeout: 10000
-        })
+    if (!userId) {
+      console.error('[Socket] User ID is required');
+      return null;
+    }
 
-        console.log("Socket initialized")
+    if (socket && socket.connected) {
+      return socket;
+    }
 
-        socket.on("connect", () => {
-          console.log("Connected to socket server with ID:", socket.id)
-        })
-
-        socket.on("connect_error", (err) => {
-          console.error("Socket connection error:", err)
-          console.error("Error details:", err.message || "No error message")
-          
-          // If we have authentication issues, don't keep trying
-          if (err.message && (err.message.includes("auth") || err.message.includes("token"))) {
-            console.error("Authentication error, disconnecting socket")
-            this.disconnect()
-          }
-        })
-        
-        socket.on("disconnect", (reason) => {
-          console.log("Socket disconnected:", reason)
-        })
-      } catch (error) {
-        console.error("Error creating socket:", error)
-        socket = null
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        console.error('[Socket] Token is required');
+        return null;
       }
+
+      socket = io(SOCKET_URL, {
+        auth: { token, userId },
+        transports: ['websocket'],
+        reconnection: true,
+        reconnectionAttempts: 5,
+      });
+
+      socket.on('connect', () => {
+        console.log(`[Socket] Connected with ID: ${socket.id}`);
+      });
+
+      socket.on('connect_error', (error) => {
+        console.error('[Socket] Connection error:', error.message);
+      });
+
+      socket.on('error', (error) => {
+        console.error('[Socket] Error:', error.message);
+      });
+
+      return socket;
+    } catch (error) {
+      console.error('[Socket] Initialization error:', error.message);
+      return null;
     }
-    return socket
   },
 
-  // Get existing socket or initialize a new one
-  getSocket() {
-    if (!socket) {
-      return this.initialize()
+  on(event, callback) {
+    if (socket) {
+      socket.on(event, callback);
+    } else {
+      console.warn(`[Socket] Cannot listen to ${event}: Socket not initialized`);
     }
-    return socket
   },
 
-  // Disconnect socket
+  off(event) {
+    if (socket) {
+      socket.off(event);
+    }
+  },
+
   disconnect() {
     if (socket) {
-      socket.disconnect()
-      socket = null
-      console.log("Socket disconnected")
+      socket.disconnect();
+      socket = null;
+      console.log('[Socket] Disconnected');
     }
   },
+};
 
-  // Listen for events
-  on(event, callback) {
-    const s = this.getSocket()
-    s.on(event, callback)
-    return () => s.off(event, callback)
-  },
-
-  // Remove event listener
-  off(event, callback) {
-    if (socket) {
-      socket.off(event, callback)
-    }
-  },
-
-  // Emit event
-  emit(event, data) {
-    const s = this.getSocket()
-    s.emit(event, data)
-  },
-}
-
-export default socketService
+export default socketService;
