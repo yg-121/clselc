@@ -35,27 +35,38 @@ export default function LawyerNotifications() {
 
   useEffect(() => {
     if (user && user._id) {
-      fetchNotifications();
-    }
-
-    let socket = null;
-    if (user?._id) {
-      socket = connectSocket(user._id);
-      
-      socket.on('connect', fetchNotifications);
-      socket.on('new_notification', (notification) => {
-        setNotifications((prev) => [notification, ...prev]);
-        toast.info(notification.message);
-      });
-    }
-
-    return () => {
-      if (socket) {
-        socket.off('connect');
-        socket.off('new_notification');
-        disconnectSocket();
+      const token = localStorage.getItem('token');
+      if (!token) {
+        console.error('No token found in localStorage for LawyerNotifications socket connection');
+        setError('Authentication required. Please log in again.');
+        return;
       }
-    };
+  
+      fetchNotifications();
+  
+      let socket = null;
+      const socketTimeout = setTimeout(() => {
+        socket = connectSocket(user._id);
+        if (socket) {
+          socket.on('connect', fetchNotifications);
+          socket.on('new_notification', (notification) => {
+            setNotifications((prev) => [notification, ...prev]);
+            toast.info(notification.message);
+          });
+        } else {
+          console.error('Socket connection failed in LawyerNotifications');
+        }
+      }, 100);
+  
+      return () => {
+        clearTimeout(socketTimeout);
+        if (socket) {
+          socket.off('connect');
+          socket.off('new_notification');
+          disconnectSocket();
+        }
+      };
+    }
   }, [user]);
 
   const markAsRead = async (notificationId) => {

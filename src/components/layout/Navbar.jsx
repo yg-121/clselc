@@ -1,8 +1,8 @@
 import { useState, useEffect } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { useAuth } from "../../hooks/authHooks";
+import { useAuth } from "../../hooks/authHooks.js";
 import { Menu, X, User, LogOut, Bell, AlertTriangle } from "lucide-react";
-import { connectSocket, disconnectSocket } from "../../utils/socket";
+import { connectSocket, disconnectSocket } from "../../utils/socket.js";
 import axios from "axios";
 
 export default function Navbar() {
@@ -16,30 +16,38 @@ export default function Navbar() {
   // Fetch unread notifications count
   useEffect(() => {
     if (user && user._id) {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        console.error('No token found in localStorage for Navbar socket connection');
+        return;
+      }
+  
       const fetchUnreadCount = async () => {
         try {
-          const token = localStorage.getItem("token");
-          if (!token) return;
-          
-          const response = await axios.get("http://localhost:5000/api/notifications/unread-count", {
-            headers: { Authorization: `Bearer ${token}` }
+          const response = await axios.get('http://localhost:5000/api/notifications/unread-count', {
+            headers: { Authorization: `Bearer ${token}` },
           });
-          
           setUnreadNotifications(response.data.count || 0);
         } catch (error) {
-          console.error("Failed to fetch unread notifications count:", error);
+          console.error('Failed to fetch unread notifications count:', error);
         }
       };
-
+  
       fetchUnreadCount();
-
-      // Set up socket connection for real-time updates
-      const socket = connectSocket(user._id);
-      socket.on("new_notification", () => {
-        setUnreadNotifications(prev => prev + 1);
-      });
-
+  
+      const socketTimeout = setTimeout(() => {
+        const socket = connectSocket(user._id);
+        if (socket) {
+          socket.on('new_notification', () => {
+            setUnreadNotifications((prev) => prev + 1);
+          });
+        } else {
+          console.error('Socket connection failed in Navbar');
+        }
+      }, 100);
+  
       return () => {
+        clearTimeout(socketTimeout);
         disconnectSocket();
       };
     }
@@ -350,7 +358,6 @@ export default function Navbar() {
     </nav>
   );
 }
-
 
 
 

@@ -1,3 +1,4 @@
+
 import { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { useAuth } from "../../hooks/authHooks.js";
@@ -87,7 +88,7 @@ const Login = () => {
           Login
         </h2>
         
-        {error && (
+        {/* {error && (
           <p
             style={{
               color: "#EF4444",
@@ -97,7 +98,7 @@ const Login = () => {
           >
             {error}
           </p>
-        )}
+        )} */}
         <form onSubmit={handleSubmit}>
           <div className="mb-4">
             <label htmlFor="email" className="block text-sm font-medium text-gray-700">

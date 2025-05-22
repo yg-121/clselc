@@ -5,9 +5,9 @@ import {
   ChevronDown, ChevronUp, CheckCircle, X, Trash2, AlertTriangle, FileText,
   ExternalLink, Award, Clock, DollarSign, ThumbsUp, Shield, Briefcase, Tag, Star
 } from "lucide-react";  
-import DocumentsTab from "../../components/case/DocumentsTab";
-import NotesTab from "../../components/case/NotesTab";
-import AppointmentsTab from "../../components/case/AppointmentsTab";
+import DocumentsTab from "../../components/case/DocumentsTab.jsx";
+import NotesTab from "../../components/case/NotesTab.jsx";
+import AppointmentsTab from "../../components/case/AppointmentsTab.jsx";
 // import { ErrorBoundary } from "react-error-boundary";
 
 // Instead, let's create a simple error boundary component
@@ -132,6 +132,8 @@ export default function CaseDetails() {
   const [appointments, setAppointments] = useState([]);
   const [appointmentsLoading, setAppointmentsLoading] = useState(false);
   const [appointmentsError, setAppointmentsError] = useState(null);
+  const [addAppointmentSuccess, setAddAppointmentSuccess] = useState(null);
+  const [addAppointmentError, setAddAppointmentError] = useState(null);
   const [showAppointmentActions, setShowAppointmentActions] = useState(null);
   const appointmentActionsRef = useRef(null);
   const [selectedAppointment, setSelectedAppointment] = useState(null);
@@ -154,11 +156,12 @@ export default function CaseDetails() {
     visibility: "Both",
     category: "Evidence"
   });
+  // Removed duplicate declaration of uploadLoading
   const [files, setFiles] = useState([]);
   const [uploadLoading, setUploadLoading] = useState(false);
   const [uploadError, setUploadError] = useState(null);
   const [uploadSuccess, setUploadSuccess] = useState(null);
-  const fileInputRef = useRef(null);
+  const fileInputRef = useRef(null); // Declare fileInputRef here
 
   // Add these state variables to your component
   const [showRatingInCloseModal, setShowRatingInCloseModal] = useState(true);

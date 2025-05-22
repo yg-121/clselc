@@ -13,23 +13,31 @@ export const connectSocket = (userId) => {
     return socket;
   }
   
+  // Retrieve token from localStorage
+  const token = localStorage.getItem('token');
+  if (!token) {
+    console.error('No token found in localStorage for socket connection');
+    return null;
+  }
+  
   // Connect to the socket server with improved configuration
   socket = io('http://localhost:5000', {
-    query: { userId },
-    transports: ['websocket', 'polling'], // Try WebSocket first, fallback to polling
-    reconnectionAttempts: 5,              // Try to reconnect 5 times
-    reconnectionDelay: 1000,              // Start with 1 second delay
-    reconnectionDelayMax: 5000,           // Maximum 5 seconds delay
-    timeout: 20000,                       // 20 seconds timeout
-    withCredentials: true                 // Send cookies if needed
+    auth: { token, userId }, // Send both token and userId in auth object
+    transports: ['websocket', 'polling'],
+    reconnectionAttempts: 5,
+    reconnectionDelay: 1000,
+    reconnectionDelayMax: 5000,
+    timeout: 20000,
+    withCredentials: true
   });
   
   socket.on('connect', () => {
-    console.log('Socket connected with ID:', socket.id);
+    console.log('Socket connected with ID:', socket.id, 'User ID:', userId);
   });
   
   socket.on('connect_error', (error) => {
-    console.error('Socket connection error:', error);
+    console.error('Socket connection error:', error.message);
+    console.log('Attempted auth data:', { token, userId });
     // Try to reconnect with polling if websocket fails
     if (socket.io.opts.transports.indexOf('polling') === -1) {
       console.log('Attempting to reconnect with polling transport');
@@ -40,7 +48,6 @@ export const connectSocket = (userId) => {
   socket.on('disconnect', (reason) => {
     console.log('Socket disconnected:', reason);
     if (reason === 'io server disconnect') {
-      // The server has forcefully disconnected the socket
       console.log('Attempting to reconnect...');
       socket.connect();
     }

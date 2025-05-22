@@ -35,36 +35,44 @@ export default function ClientNotifications() {
   };
 
   useEffect(() => {
-    // Fetch notifications when component mounts
     if (user && user._id) {
-      fetchNotifications();
-    }
-
-    // Connect to Socket.IO for real-time notifications
-    let socket = null;
-    if (user?._id) {
-      socket = connectSocket(user._id);
-      
-      // Handle socket reconnection
-      const handleReconnect = () => {
-        console.log('Socket reconnected, refreshing notifications');
-        fetchNotifications();
-      };
-      
-      socket.on('connect', handleReconnect);
-      socket.on('new_notification', (notification) => {
-        setNotifications((prev) => [notification, ...prev]);
-        toast.info(notification.message);
-      });
-    }
-
-    return () => {
-      if (socket) {
-        socket.off('connect');
-        socket.off('new_notification');
-        disconnectSocket();
+      const token = localStorage.getItem('token');
+      if (!token) {
+        console.error('No token found in localStorage for ClientNotifications socket connection');
+        setError('Authentication required. Please log in again.');
+        return;
       }
-    };
+  
+      fetchNotifications();
+  
+      let socket = null;
+      const socketTimeout = setTimeout(() => {
+        socket = connectSocket(user._id);
+        if (socket) {
+          const handleReconnect = () => {
+            console.log('Socket reconnected, refreshing notifications');
+            fetchNotifications();
+          };
+          
+          socket.on('connect', handleReconnect);
+          socket.on('new_notification', (notification) => {
+            setNotifications((prev) => [notification, ...prev]);
+            toast.info(notification.message);
+          });
+        } else {
+          console.error('Socket connection failed in ClientNotifications');
+        }
+      }, 100);
+  
+      return () => {
+        clearTimeout(socketTimeout);
+        if (socket) {
+          socket.off('connect');
+          socket.off('new_notification');
+          disconnectSocket();
+        }
+      };
+    }
   }, [user]);
 
   const markAsRead = async (notificationId) => {
