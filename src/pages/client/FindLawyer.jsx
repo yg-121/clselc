@@ -28,7 +28,7 @@ export default function FindLawyers({ userRole }) {
         setLoading(true);
         const token = localStorage.getItem("token");
         if (!token) throw new Error("Authentication token not found. Please log in.");
-        
+      
         const response = await fetch("http://localhost:5000/api/users/lawyers", {
           headers: { Authorization: `Bearer ${token}` },
         });
@@ -39,7 +39,16 @@ export default function FindLawyers({ userRole }) {
         }
 
         const data = await response.json();
-        setLawyers(data.lawyers || []);
+        console.log("Lawyers data:", data); 
+        
+        if (Array.isArray(data)) {
+          setLawyers(data);
+        } else if (data.lawyers && Array.isArray(data.lawyers)) {
+          setLawyers(data.lawyers);
+        } else {
+          console.error("Unexpected data structure:", data);
+          setLawyers([]);
+        }
       } catch (err) {
         console.error("Error:", err);
         setError(err.message);
@@ -138,10 +147,21 @@ export default function FindLawyers({ userRole }) {
             aria-label="Filter by location"
           >
             <option value="">All Locations</option>
+            
             <option value="Addis Ababa">Addis Ababa</option>
             <option value="Dire Dawa">Dire Dawa</option>
-            <option value="Bahir Dar">Bahir Dar</option>
-            <option value="Hawassa">Hawassa</option>
+            <option value="Bahir Dar">Bahir Dar</option> 
+            <option value="Hawassa">Hawassa</option>     
+            <option value="Adama">Adama</option>         
+            <option value="Asosa">Asosa</option>         
+            <option value="Gambela">Gambela</option>     
+            <option value="Jigjiga">Jigjiga</option>     
+            <option value="Mekele">Mekele</option>       
+            <option value="Semera">Semera</option>       
+            <option value="Dessie">Dessie</option>       
+            <option value="Bonga">Bonga</option> 
+            <option value="Wolaita Sodo">Wolaita Sodo</option>
+            <option value="Hossana">Hossana</option>                 
           </select>
         </div>
         
@@ -214,18 +234,20 @@ export default function FindLawyers({ userRole }) {
                   <Briefcase size={14} className="mr-2 text-primary" />
                   <span>{lawyer.specialization?.join(", ") || "Not specified"}</span>
                 </div>
+
                 <div className="flex items-center">
                   <MapPin size={14} className="mr-2 text-primary" />
                   <span>{lawyer.location || "Not specified"}</span>
                 </div>
+                
                 <div className="flex items-center">
                   <Clock size={14} className="mr-2 text-primary" />
                   <span className={lawyer.isAvailable ? "text-green-600" : "text-red-500"}>
                     {lawyer.isAvailable ? "Available" : "Unavailable"}
                   </span>
                 </div>
-              </div>
               
+              </div>  
               <Link
                 to={`/client/lawyer/${lawyer._id}`}
                 className="block w-full text-center py-2 bg-primary text-white rounded hover:bg-primary/90 text-sm"

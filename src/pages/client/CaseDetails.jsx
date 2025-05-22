@@ -3,16 +3,8 @@ import { useParams, Link, useNavigate } from "react-router-dom";
 import {
   File, MessageSquare, Calendar, Plus, User, Edit,
   ChevronDown, ChevronUp, CheckCircle, X, Trash2, AlertTriangle, FileText,
-  ExternalLink, Award, Clock, DollarSign, ThumbsUp, Shield, Briefcase, Tag
-} from "lucide-react";
-import CaseDocument from "./CaseDocument";
-import AppointmentsPage from "../common/Appointments";
-import CaseHeader from "../../components/case/CaseHeader";
-import TabsNavigation from "../../components/case/TabsNavigation";
-import TabContent from "../../components/case/TabContent";
-import AddNoteModal from "../../components/case/AddNoteModal";
-import AddAppointmentModal from "../../components/case/AddAppointmentModal";
-import RescheduleModal from "../../components/case/RescheduleModal";
+  ExternalLink, Award, Clock, DollarSign, ThumbsUp, Shield, Briefcase, Tag, Star
+} from "lucide-react";  
 import DocumentsTab from "../../components/case/DocumentsTab";
 import NotesTab from "../../components/case/NotesTab";
 import AppointmentsTab from "../../components/case/AppointmentsTab";
@@ -88,7 +80,7 @@ const formatDate = (dateString) => {
 const formatCurrency = (amount) => {
   return new Intl.NumberFormat("en-US", {
     style: "currency",
-    currency: "USD",
+    currency: "ETB",
   }).format(amount);
 };
 
@@ -167,6 +159,12 @@ export default function CaseDetails() {
   const [uploadError, setUploadError] = useState(null);
   const [uploadSuccess, setUploadSuccess] = useState(null);
   const fileInputRef = useRef(null);
+
+  // Add these state variables to your component
+  const [showRatingInCloseModal, setShowRatingInCloseModal] = useState(true);
+  const [ratingValue, setRatingValue] = useState(0);
+  const [ratingHover, setRatingHover] = useState(0);
+  const [ratingComment, setRatingComment] = useState("");
 
   // Function to fetch case and bids data
   const fetchCaseDetails = async () => {
@@ -406,6 +404,7 @@ export default function CaseDetails() {
         throw new Error("Authentication token not found. Please log in.");
       }
 
+      // First close the case
       const res = await fetch(`http://localhost:5000/api/cases/${id}/close`, {
         method: "PATCH",
         headers: {
@@ -421,6 +420,32 @@ export default function CaseDetails() {
       const data = await res.json();
       setCloseSuccess(data.message);
 
+      // If rating was provided, submit it
+      if (showRatingInCloseModal && ratingValue > 0 && caseDetail.assigned_lawyer) {
+        try {
+          const ratingRes = await fetch("http://localhost:5000/api/ratings", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify({
+              caseId: id,
+              rating: ratingValue,
+              comment: ratingComment.trim() || undefined,
+            }),
+          });
+
+          if (!ratingRes.ok) {
+            const errorData = await ratingRes.json();
+            console.error("Rating submission error:", errorData);
+            // We don't throw here to avoid preventing case closure
+          }
+        } catch (ratingErr) {
+          console.error("Error submitting rating:", ratingErr);
+        }
+      }
+
       await fetchCaseDetails();
     } catch (err) {
       console.error("Error closing case:", err);
@@ -428,6 +453,10 @@ export default function CaseDetails() {
     } finally {
       setCloseLoading(false);
       setIsCloseModalOpen(false);
+      // Reset rating state
+      setRatingValue(0);
+      setRatingHover(0);
+      setRatingComment("");
     }
   };
 
@@ -1048,7 +1077,7 @@ export default function CaseDetails() {
                           </div>
                           
                           <div className="bg-gray-50 p-3 rounded-lg mb-4 text-gray-700">
-                            {bid.message || "No additional message provided."}
+                            {bid.comment || "No additional message provided."}
                           </div>
                           
                           <div className="flex justify-end">
@@ -1202,13 +1231,13 @@ export default function CaseDetails() {
         </div>
       </div>
 
-      {/* Close Confirmation Modal */}
+      {/* Close Case Modal */}
       {isCloseModalOpen && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white rounded-lg p-6 w-full max-w-md shadow-lg transform transition-all duration-300 scale-100">
             <div className="flex justify-between items-center mb-4">
               <h2 className="text-xl font-semibold text-gray-800">
-                Confirm Close
+                Close Case
               </h2>
               <button
                 onClick={() => setIsCloseModalOpen(false)}
@@ -1217,22 +1246,90 @@ export default function CaseDetails() {
                 <X className="h-6 w-6" />
               </button>
             </div>
-            <p className="text-gray-600 mb-6">
-              Are you sure you want to close this case? This action cannot be
-              undone.
+            
+            <p className="mb-4 text-gray-600">
+              Are you sure you want to close this case? This action cannot be undone.
             </p>
+            
+            {closeError && (
+              <div className="mb-4 p-2 bg-red-100 text-red-600 rounded-lg">
+                {closeError}
+              </div>
+            )}
+            
+            {/* Rating Section - Only show if there's an assigned lawyer */}
+            {caseDetail?.assigned_lawyer && (
+              <div className="mb-6 border-t border-gray-200 pt-4 mt-4">
+                <div className="flex items-center justify-between mb-2">
+                  <h3 className="font-medium text-gray-800">Rate your lawyer</h3>
+                  <label className="inline-flex items-center cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={showRatingInCloseModal}
+                      onChange={() => setShowRatingInCloseModal(!showRatingInCloseModal)}
+                      className="sr-only peer"
+                    />
+                    <div className="relative w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                    <span className="ml-2 text-sm font-medium text-gray-600">
+                      {showRatingInCloseModal ? "Enabled" : "Skip rating"}
+                    </span>
+                  </label>
+                </div>
+                
+                {showRatingInCloseModal && (
+                  <>
+                    {/* Star Rating */}
+                    <div className="flex justify-center space-x-1 mb-4">
+                      {[1, 2, 3, 4, 5].map((star) => (
+                        <button
+                          key={star}
+                          type="button"
+                          onClick={() => setRatingValue(star)}
+                          onMouseEnter={() => setRatingHover(star)}
+                          onMouseLeave={() => setRatingHover(0)}
+                          className="focus:outline-none"
+                        >
+                          <Star
+                            className={`h-8 w-8 ${
+                              star <= (ratingHover || ratingValue)
+                                ? "text-yellow-400 fill-yellow-400"
+                                : "text-gray-300"
+                            } transition-colors duration-150`}
+                          />
+                        </button>
+                      ))}
+                    </div>
+                    
+                    {/* Rating Description */}
+                    <div className="text-center mb-4">
+                      <p className="text-sm font-medium text-gray-700">
+                        {ratingValue === 1 && "Poor - Unsatisfactory experience"}
+                        {ratingValue === 2 && "Fair - Below average experience"}
+                        {ratingValue === 3 && "Good - Average experience"}
+                        {ratingValue === 4 && "Very Good - Above average experience"}
+                        {ratingValue === 5 && "Excellent - Outstanding experience"}
+                        {ratingValue === 0 && "Select a rating"}
+                      </p>
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
+            
             <div className="flex justify-end space-x-2">
               <button
                 onClick={() => setIsCloseModalOpen(false)}
-                className="px-4 py-2 bg-gradient-to-r from-gray-500 to-gray-600 text-white rounded-lg shadow-md hover:from-gray-600 hover:to-gray-700 hover:scale-105 transition-all duration-300"
+                className="px-4 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 transition-colors"
               >
                 Cancel
               </button>
               <button
                 onClick={handleCloseCase}
-                disabled={closeLoading}
-                className={`px-4 py-2 bg-gradient-to-r from-gray-700 to-gray-800 text-white rounded-lg shadow-md hover:from-gray-800 hover:to-gray-900 hover:scale-105 transition-all duration-300 flex items-center ${
-                  closeLoading ? "opacity-50 cursor-not-allowed" : ""
+                disabled={closeLoading || (showRatingInCloseModal && ratingValue === 0 && caseDetail?.assigned_lawyer)}
+                className={`px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors flex items-center ${
+                  (closeLoading || (showRatingInCloseModal && ratingValue === 0 && caseDetail?.assigned_lawyer)) 
+                    ? "opacity-50 cursor-not-allowed" 
+                    : ""
                 }`}
               >
                 {closeLoading ? (
@@ -1241,7 +1338,7 @@ export default function CaseDetails() {
                     Closing...
                   </>
                 ) : (
-                  "Confirm Close"
+                  "Close Case"
                 )}
               </button>
             </div>

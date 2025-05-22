@@ -1,16 +1,63 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../../hooks/authHooks";
 import { Menu, X, User, LogOut, Bell, AlertTriangle } from "lucide-react";
+import { connectSocket, disconnectSocket } from "../../utils/socket";
+import axios from "axios";
+
 export default function Navbar() {
   const { user, logout } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
+  const [unreadNotifications, setUnreadNotifications] = useState(0);
 
-  // Mock unread notifications count
-  const unreadNotifications = 3;
+  // Fetch unread notifications count
+  useEffect(() => {
+    if (user && user._id) {
+      const fetchUnreadCount = async () => {
+        try {
+          const token = localStorage.getItem("token");
+          if (!token) return;
+          
+          const response = await axios.get("http://localhost:5000/api/notifications/unread-count", {
+            headers: { Authorization: `Bearer ${token}` }
+          });
+          
+          setUnreadNotifications(response.data.count || 0);
+        } catch (error) {
+          console.error("Failed to fetch unread notifications count:", error);
+        }
+      };
+
+      fetchUnreadCount();
+
+      // Set up socket connection for real-time updates
+      const socket = connectSocket(user._id);
+      socket.on("new_notification", () => {
+        setUnreadNotifications(prev => prev + 1);
+      });
+
+      return () => {
+        disconnectSocket();
+      };
+    }
+  }, [user]);
+
+  // Handle notification icon click
+  const handleNotificationClick = () => {
+    if (!user) return;
+    
+    // Navigate to the appropriate notifications page based on user role
+    if (user.role === "Lawyer") {
+      navigate("/lawyer/notifications");
+    } else if (user.role === "Client") {
+      navigate("/client/notifications");
+    } else if (user.role === "Admin") {
+      navigate("/dashboard/admin/notifications");
+    }
+  };
 
   const handleLogoutClick = () => {
     setShowLogoutConfirm(true);
@@ -110,8 +157,8 @@ export default function Navbar() {
                   Welcome, {user.username}
                 </span>
                 {/* Notifications Button */}
-                <Link
-                  to="/client/notification"
+                <button
+                  onClick={handleNotificationClick}
                   className="relative text-gray-800 hover:text-gray-600 p-2 rounded-full hover:bg-gray-100 transition-all duration-300"
                 >
                   <Bell className="h-6 w-6" />
@@ -121,7 +168,7 @@ export default function Navbar() {
                     </span>
                   )}
                   <span className="sr-only">Notifications</span>
-                </Link>
+                </button>
                 {/* Profile Button */}
                 <Link
                   to={
@@ -209,10 +256,12 @@ export default function Navbar() {
                 <div className="px-3 py-2 text-base font-medium text-gray-800">
                   Welcome, {user.username}
                 </div>
-                <Link
-                  to={`/${user.role.toLowerCase()}/notifications`}
-                  className="block px-3 py-2 rounded-md text-base font-medium text-gray-800 hover:text-gray-600 flex items-center"
-                  onClick={() => setMobileMenuOpen(false)}
+                <button
+                  onClick={() => {
+                    handleNotificationClick();
+                    setMobileMenuOpen(false);
+                  }}
+                  className="block w-full text-left px-3 py-2 rounded-md text-base font-medium text-gray-800 hover:text-gray-600 flex items-center"
                 >
                   <Bell className="h-5 w-5 mr-2" />
                   Notifications
@@ -221,7 +270,7 @@ export default function Navbar() {
                       {unreadNotifications}
                     </span>
                   )}
-                </Link>
+                </button>
                 <Link
                   to={
                     user.role === "Lawyer"
@@ -301,6 +350,17 @@ export default function Navbar() {
     </nav>
   );
 }
+
+
+
+
+
+
+
+
+
+
+
 
 
 

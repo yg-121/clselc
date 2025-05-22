@@ -67,6 +67,15 @@ export default function Login() {
           padding: "1.5rem",
         }}
       >
+     
+        <div className="flex justify-center items-center mb-0">
+          <img
+            src="/Logo.png"
+            alt="LegalConnect Ethiopia Logo"
+            className="h-25 w-32"
+          />
+        </div>
+        
         <h2
           style={{
             fontSize: "1.5rem",
@@ -74,10 +83,12 @@ export default function Login() {
             textAlign: "center",
             color: "#111827",
             marginBottom: "1.5rem",
+            marginTop: "0 rem",
           }}
         >
           Login
         </h2>
+        
         {error && (
           <p
             style={{
@@ -266,5 +277,8 @@ export default function Login() {
     </div>
   );
 }
+
+
+
 
 

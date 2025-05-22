@@ -30,8 +30,19 @@ import CaseAnalytics from "./pages/lawyer/CaseAnalytics";
 import MyBids from "./pages/lawyer/MyBids";
 import LawyerProfile from "./pages/lawyer/LawyerProfile";
 import AdminDashboard from "./components/dashboard/AdminDashboard";
-import MessagesPage from "./pages/common/Messages";
+import MessagePage from "./pages/common/MessagePage" ;
 import ClientProfile from "./pages/client/ClientProfile";
+import ClientNotifications from "./pages/client/Notifications";
+import LawyerNotifications from "./pages/lawyer/Notifications";
+import AdminNotifications from "./pages/admin/Notifications";
+import About from "./pages/static/About";
+import Services from "./pages/static/Services";
+import HowItWorks from "./pages/static/HowItWorks";
+import Blog from "./pages/static/Blog";
+import Terms from "./pages/static/Terms";
+import Privacy from "./pages/static/Privacy";
+import FAQ from "./pages/static/FAQ";
+import Contact from "./pages/static/Contact";
 
 // Not Found Component
 const NotFound = () => {
@@ -161,7 +172,7 @@ function AppRoutes() {
             path="/client/messages"
             element={
               <ProtectedRoute allowedRoles={["Client"]}>
-                <MessagesPage />
+                <MessagePage />
               </ProtectedRoute>
             }
           />
@@ -246,14 +257,14 @@ function AppRoutes() {
               </ProtectedRoute>
             }
           />
-          <Route
+          {/* <Route
             path="/lawyer/messages"
             element={
               <ProtectedRoute allowedRoles={["Lawyer"]}>
                 <MessagesPage />
               </ProtectedRoute>
             }
-          />
+          /> */}
           <Route
             path="/lawyer/profile/:lawyerId"
             element={
@@ -278,6 +289,39 @@ function AppRoutes() {
               </ProtectedRoute>
             }
           />
+          <Route
+            path="/client/notifications"
+            element={
+              <ProtectedRoute allowedRoles={["Client"]}>
+                <ClientNotifications />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/lawyer/notifications"
+            element={
+              <ProtectedRoute allowedRoles={["Lawyer"]}>
+                <LawyerNotifications />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/dashboard/admin/notifications"
+            element={
+              <ProtectedRoute allowedRoles={["Admin"]}>
+                <AdminNotifications />
+              </ProtectedRoute>
+            }
+          />
+          {/* Static Pages */}
+          <Route path="/about" element={<About />} />
+          <Route path="/services" element={<Services />} />
+          <Route path="/how-it-works" element={<HowItWorks />} />
+          <Route path="/blog" element={<Blog />} />
+          <Route path="/terms" element={<Terms />} />
+          <Route path="/privacy" element={<Privacy />} />
+          <Route path="/faq" element={<FAQ />} />
+          <Route path="/contact" element={<Contact />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </main>
@@ -297,6 +341,10 @@ function App() {
 }
 
 export default App;
+
+
+
+
 
 
 

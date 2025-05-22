@@ -8,7 +8,7 @@ import io from "socket.io-client";
 const API_URL = "http://localhost:5000";
 let socket;
 
-export default function MessagesPage() {
+export default function ClientMessagesPage() {
   const { conversationId } = useParams();
   const [conversations, setConversations] = useState([]);
   const [selectedConversation, setSelectedConversation] = useState(null);
@@ -256,7 +256,7 @@ export default function MessagesPage() {
     }
   };
 
-  // Send a message
+  // Send a message to the selected lawyer
   const handleSendMessage = async () => {
     if ((!newMessage.trim() && !file) || !selectedConversation || sending) return;
     
@@ -533,4 +533,139 @@ export default function MessagesPage() {
                             message.sender === "user" ? "justify-end" : "justify-start"
                           }`}
                         >
-                          {message
+                          {message.sender !== "user" && (
+                            <div className="h-8 w-8 rounded-full bg-gray-200 flex items-center justify-center text-gray-600 font-medium mr-2">
+                              {selectedConversation.contactName.charAt(0).toUpperCase()}
+                            </div>
+                          )}
+                          <div
+                            className={`max-w-xs lg:max-w-md px-4 py-2 rounded-lg ${
+                              message.sender === "user"
+                                ? "bg-primary text-white"
+                                : "bg-gray-100 text-gray-800"
+                            }`}
+                          >
+                            {message.file && (
+                              <div className="mb-2">
+                                <a
+                                  href={`${API_URL}/${message.filePath}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-xs underline flex items-center"
+                                >
+                                  <Paperclip className="h-3 w-3 mr-1" />
+                                  Download attachment
+                                </a>
+                              </div>
+                            )}
+                            {message.content && <p>{message.content}</p>}
+                            <div
+                              className={`text-xs mt-1 flex justify-end ${
+                                message.sender === "user"
+                                  ? "text-primary-foreground/70"
+                                  : "text-gray-500"
+                              }`}
+                            >
+                              <span>{formatMessageTime(message.timestamp)}</span>
+                              {message.sender === "user" && (
+                                <span className="ml-1">{getStatusIcon(message.status)}</span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      ))
+                    ) : (
+                      <div className="flex flex-col items-center justify-center h-full text-gray-500">
+                        <User className="h-12 w-12 text-gray-300 mb-2" />
+                        <p>No messages yet</p>
+                        <p className="text-sm">Send a message to start the conversation</p>
+                      </div>
+                    )}
+                    <div ref={messagesEndRef} />
+                  </div>
+
+                  {/* Message Input */}
+                  <div className="p-4 border-t border-gray-200">
+                    {file && (
+                      <div className="mb-2 p-2 bg-gray-100 rounded-md flex justify-between items-center">
+                        <span className="text-xs text-gray-600 truncate">
+                          <Paperclip className="h-3 w-3 inline mr-1" />
+                          {file.name}
+                        </span>
+                        <button
+                          className="text-gray-500 hover:text-gray-700"
+                          onClick={() => setFile(null)}
+                        >
+                          &times;
+                        </button>
+                      </div>
+                    )}
+                    <div className="flex items-center">
+                      <button
+                        className="p-2 rounded-full text-gray-500 hover:text-gray-700 hover:bg-gray-100"
+                        onClick={() => fileInputRef.current?.click()}
+                      >
+                        <Paperclip className="h-5 w-5" />
+                      </button>
+                      <input
+                        type="file"
+                        ref={fileInputRef}
+                        className="hidden"
+                        onChange={handleFileSelect}
+                      />
+                      <input
+                        type="text"
+                        placeholder="Type a message..."
+                        className="flex-1 mx-2 p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
+                        value={newMessage}
+                        onChange={(e) => setNewMessage(e.target.value)}
+                        onKeyPress={(e) => {
+                          if (e.key === "Enter") {
+                            handleSendMessage();
+                          }
+                        }}
+                      />
+                      <button
+                        className={`p-2 rounded-full ${
+                          !newMessage.trim() && !file
+                            ? "text-gray-400 cursor-not-allowed"
+                            : "text-primary hover:bg-primary/10"
+                        }`}
+                        onClick={handleSendMessage}
+                        disabled={(!newMessage.trim() && !file) || sending}
+                      >
+                        {sending ? (
+                          <div className="h-5 w-5 border-t-2 border-b-2 border-primary rounded-full animate-spin" />
+                        ) : (
+                          <Send className="h-5 w-5" />
+                        )}
+                      </button>
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <div className="flex flex-col items-center justify-center h-full text-gray-500">
+                  <User className="h-16 w-16 text-gray-300 mb-4" />
+                  <h3 className="text-xl font-medium mb-2">No conversation selected</h3>
+                  <p className="text-sm">Choose a conversation from the list or start a new one</p>
+                  {userRole === "Client" && (
+                    <button
+                      onClick={() => navigate("/client/lawyer")}
+                      className="mt-6 px-4 py-2 bg-primary text-white rounded-md text-sm hover:bg-primary/90"
+                    >
+                      Find a Lawyer
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+
+
+
