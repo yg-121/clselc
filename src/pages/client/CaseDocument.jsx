@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { File, Download, Trash } from "lucide-react";
+import { File, Download, Trash, Eye, X } from "lucide-react";
 
 export default function CaseDocument({
   documents,
@@ -12,15 +12,12 @@ export default function CaseDocument({
   const [deleteError, setDeleteError] = useState(null);
 
   const handleDeleteClick = (docId) => {
-    console.log("Delete button clicked for document ID:", docId); // Debug log
     setDocToDelete(docId);
     setShowPopup(true);
-    setDeleteError(null); // Reset error state
-    console.log("showPopup set to:", true, "docToDelete set to:", docId); // Debug log
+    setDeleteError(null);
   };
 
   const handleDeleteConfirm = async () => {
-    console.log("Delete confirmed for document ID:", docToDelete); // Debug log
     try {
       setDeleteLoading(true);
       setDeleteError(null);
@@ -42,139 +39,134 @@ export default function CaseDocument({
 
       if (!res.ok) {
         const errorData = await res.json();
-        if (res.status === 401 || res.status === 403) {
-          throw new Error("Session expired. Please log in again.");
-        }
         throw new Error(errorData.message || "Failed to delete document.");
       }
 
-      // Refresh the case details using the callback instead of reloading the page
+      // Refresh the case details using the callback
       if (refreshCaseDetails) {
         await refreshCaseDetails();
       }
+      
+      setShowPopup(false);
+      setDocToDelete(null);
     } catch (err) {
       console.error("Error deleting document:", err);
       setDeleteError(err.message);
-      if (err.message.includes("log in")) {
-        // Optionally redirect to login page if the session is expired
-        localStorage.removeItem("token"); // Clear invalid token
-        window.location.href = "/login"; // Redirect to login page
-      }
     } finally {
       setDeleteLoading(false);
-      setShowPopup(false);
-      setDocToDelete(null);
     }
   };
 
   const handleCancelDelete = () => {
-    console.log("Delete canceled"); // Debug log
     setShowPopup(false);
     setDocToDelete(null);
     setDeleteError(null);
   };
 
-  console.log("Rendering CaseDocument, showPopup:", showPopup); // Debug log
-
   return (
     <div className="relative">
       {/* Documents List */}
       {documents && documents.length > 0 ? (
-        <ul className="space-y-4">
+        <div className="space-y-4">
           {documents.map((doc) => (
-            <li
+            <div
               key={doc._id}
-              className="p-4 border border-gray-300 rounded-lg hover:border-gray-500 hover:bg-gray-50 transition-all duration-300"
+              className="p-4 border border-gray-200 rounded-lg hover:border-primary hover:bg-gray-50 transition-all duration-300"
             >
               <div className="flex justify-between items-center">
                 <div>
-                  <p className="text-sm text-gray-600">
-                    <span className="font-medium text-gray-800">File:</span>{" "}
-                    {doc.fileName}
-                  </p>
-                  <p className="text-sm text-gray-600">
-                    <span className="font-medium text-gray-800">Category:</span>{" "}
-                    {doc.category}
-                  </p>
-                  <p className="text-sm text-gray-600">
-                    <span className="font-medium text-gray-800">
-                      Visibility:
-                    </span>{" "}
-                    {doc.visibility}
-                  </p>
-                  <p className="text-sm text-gray-600">
-                    <span className="font-medium text-gray-800">
-                      Uploaded By:
-                    </span>{" "}
-                    {doc.uploadedBy?.username || "Unknown"}
-                  </p>
-                  <p className="text-sm text-gray-600">
-                    <span className="font-medium text-gray-800">
-                      Uploaded At:
-                    </span>{" "}
-                    {new Date(doc.uploadedAt).toLocaleDateString()}
+                  <p className="font-medium">{doc.fileName}</p>
+                  <div className="flex flex-wrap gap-2 mt-1">
+                    <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">
+                      {doc.category}
+                    </span>
+                    <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-800">
+                      {doc.visibility}
+                    </span>
+                  </div>
+                  <p className="text-xs text-gray-500 mt-1">
+                    Uploaded: {new Date(doc.uploadedAt).toLocaleDateString()} by {doc.uploadedBy?.username || "Unknown"}
                   </p>
                 </div>
-                <div className="flex flex-col space-y-2">
+                <div className="flex space-x-2">
+                  <a
+                    href={`http://localhost:5000/${doc.filePath}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center p-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
+                    title="View"
+                  >
+                    <Eye className="h-4 w-4" />
+                  </a>
                   <a
                     href={`http://localhost:5000/${doc.filePath}`}
                     download
-                    className="inline-flex items-center px-3 py-1 bg-gradient-to-r from-gray-700 to-gray-800 text-white rounded-lg shadow-md hover:from-gray-800 hover:to-gray-900 hover:scale-105 transition-all duration-300"
+                    className="inline-flex items-center p-2 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition-colors"
+                    title="Download"
                   >
-                    <Download className="h-4 w-4 mr-2" /> Download
+                    <Download className="h-4 w-4" />
                   </a>
                   <button
                     onClick={() => handleDeleteClick(doc._id)}
-                    className="inline-flex items-center px-3 py-1 bg-gradient-to-r from-red-600 to-red-700 text-white rounded-lg shadow-md hover:from-red-700 hover:to-red-800 hover:scale-105 transition-all duration-300"
+                    className="inline-flex items-center p-2 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 transition-colors"
+                    title="Delete"
                   >
-                    <Trash className="h-4 w-4 mr-2" /> Delete
+                    <Trash className="h-4 w-4" />
                   </button>
                 </div>
               </div>
-            </li>
+            </div>
           ))}
-        </ul>
-      ) : (
-        <p className="text-gray-600">No documents available.</p>
-      )}
-
-      {/* Display Error Message */}
-      {deleteError && (
-        <div className="mt-4 p-2 bg-red-100 text-red-600 rounded-lg">
-          {deleteError}
         </div>
+      ) : (
+        <p className="text-gray-500 italic text-center">No documents available.</p>
       )}
 
-      {/* Delete Confirmation Popup */}
+      {/* Delete Confirmation Modal */}
       {showPopup && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg shadow-xl p-6 max-w-md w-full">
-            <h3 className="text-lg font-semibold mb-4">Confirm Deletion</h3>
-            <p className="mb-6">
-              Are you sure you want to delete this document? This action cannot
-              be undone.
-            </p>
-            <div className="flex justify-end space-x-4">
+          <div className="bg-white rounded-lg p-6 w-full max-w-md shadow-lg">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-xl font-semibold text-gray-800">
+                Confirm Deletion
+              </h2>
               <button
                 onClick={handleCancelDelete}
-                className="px-4 py-2 bg-gradient-to-r from-gray-500 to-gray-600 text-white rounded-lg shadow-md hover:from-gray-600 hover:to-gray-700 hover:scale-105 transition-all duration-300"
+                className="text-gray-500 hover:text-gray-700"
+              >
+                <X className="h-6 w-6" />
+              </button>
+            </div>
+            <p className="text-gray-600 mb-6">
+              Are you sure you want to delete this document? This action cannot be
+              undone.
+            </p>
+            {deleteError && (
+              <div className="mb-4 p-3 bg-red-100 text-red-700 rounded-lg">
+                {deleteError}
+              </div>
+            )}
+            <div className="flex justify-end space-x-2">
+              <button
+                onClick={handleCancelDelete}
+                className="px-4 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 transition-colors"
               >
                 Cancel
               </button>
               <button
                 onClick={handleDeleteConfirm}
                 disabled={deleteLoading}
-                className={`px-4 py-2 bg-gradient-to-r from-red-600 to-red-700 text-white rounded-lg shadow-md hover:from-red-700 hover:to-red-800 hover:scale-105 transition-all duration-300 flex items-center ${
+                className={`px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors flex items-center ${
                   deleteLoading ? "opacity-50 cursor-not-allowed" : ""
                 }`}
               >
                 {deleteLoading ? (
                   <>
-                    <div className="animate-spin rounded-full h-5 w-5 border-t-2 border-b-2 border-white mr-2"></div>
+                    <div className="animate-spin rounded-full h-4 w-4 border-t-2 border-b-2 border-white mr-2"></div>
                     Deleting...
                   </>
                 ) : (
-                  "Delete"
+                  "Delete Document"
                 )}
               </button>
             </div>

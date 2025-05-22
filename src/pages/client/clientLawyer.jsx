@@ -1,223 +1,75 @@
 import { useState, useEffect } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useParams, useNavigate } from "react-router-dom";
+import axios from "axios";
 import {
   Briefcase,
   MapPin,
   Star,
   MessageSquare,
-  Globe,
-  DollarSign,
-  CheckCircle,
-  XCircle,
+  Calendar,
+  User,
+  Phone,
+  Mail,
+  Clock,
 } from "lucide-react";
 
 export default function ClientLawyerProfile() {
-  const [lawyerData, setLawyerData] = useState(null);
+  const { lawyerId } = useParams();
+  const [lawyer, setLawyer] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const { lawyerId } = useParams();
-  const [editMode, setEditMode] = useState(false);
-  const [formData, setFormData] = useState({
-    username: "",
-    email: "",
-    specialization: "",
-    location: "",
-    yearsOfExperience: "",
-    bio: "",
-    certifications: "",
-    hourlyRate: "",
-    languages: "",
-    isAvailable: false,
-    profilePhoto: null,
-  });
-  const [successMessage, setSuccessMessage] = useState("");
+  const navigate = useNavigate();
 
   useEffect(() => {
     const fetchLawyerProfile = async () => {
-      if (!lawyerId) {
-        setError("Invalid lawyer ID. Please check the URL.");
-        setLoading(false);
-        return;
-      }
-
       try {
         setLoading(true);
-        setError(null);
+        const token = localStorage.getItem("token");
+        if (!token) throw new Error("Authentication required. Please log in.");
 
-        const response = await fetch(
+        const response = await axios.get(
           `http://localhost:5000/api/users/lawyers/${lawyerId}`,
-          {
-            method: "GET",
-          }
+          { headers: { Authorization: `Bearer ${token}` } }
         );
 
-        if (!response.ok) {
-          const errorData = await response
-            .json()
-            .catch(() => ({ message: "Server Error" }));
-          if (response.status === 404) {
-            throw new Error(errorData.message || "Lawyer not found");
-          }
-          throw new Error(
-            errorData.message ||
-              `Failed to fetch lawyer profile (Status: ${response.status})`
-          );
-        }
-
-        const data = await response.json();
-        setLawyerData(data.lawyer);
-        setFormData({
-          username: data.lawyer.username || "",
-          email: data.lawyer.email || "",
-          specialization: Array.isArray(data.lawyer.specialization)
-            ? data.lawyer.specialization.join(", ")
-            : data.lawyer.specialization || "",
-          location: data.lawyer.location || "",
-          yearsOfExperience: data.lawyer.yearsOfExperience || "",
-          bio: data.lawyer.bio || "",
-          certifications: Array.isArray(data.lawyer.certifications)
-            ? data.lawyer.certifications.join(", ")
-            : data.lawyer.certifications || "",
-          hourlyRate: data.lawyer.hourlyRate || "",
-          languages: Array.isArray(data.lawyer.languages)
-            ? data.lawyer.languages.join(", ")
-            : data.lawyer.languages || "",
-          isAvailable: data.lawyer.isAvailable || false,
-          profilePhoto: null,
-        });
+        console.log("Lawyer data:", response.data.lawyer); // Debug log
+        setLawyer(response.data.lawyer);
+        setLoading(false);
       } catch (err) {
         console.error("Error fetching lawyer profile:", err);
-        setError(err.message);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchLawyerProfile();
-  }, [lawyerId]);
-
-  const handleInputChange = (e) => {
-    const { name, value, type, checked, files } = e.target;
-    if (type === "checkbox") {
-      setFormData((prev) => ({ ...prev, [name]: checked }));
-    } else if (type === "file") {
-      setFormData((prev) => ({ ...prev, [name]: files[0] }));
-    } else {
-      setFormData((prev) => ({ ...prev, [name]: value }));
-    }
-  };
-
-  const handleUpdateProfile = async (e) => {
-    e.preventDefault();
-    const token = localStorage.getItem("token");
-    if (!token) {
-      setError("Authentication token not found. Please log in.");
-      return;
-    }
-
-    const data = new FormData();
-
-    // Helper to compare arrays after trimming
-    const arraysEqual = (arr1, arr2) => {
-      if (arr1.length !== arr2.length) return false;
-      const sorted1 = [...arr1].sort();
-      const sorted2 = [...arr2].sort();
-      return sorted1.every((val, idx) => val === sorted2[idx]);
-    };
-
-    // Process each field and only append if changed
-    Object.keys(formData).forEach((key) => {
-      if (
-        key === "specialization" ||
-        key === "certifications" ||
-        key === "languages"
-      ) {
-        const formValues = formData[key]
-          .split(",")
-          .map((item) => item.trim())
-          .filter((item) => item.length > 0);
-        const originalValues = Array.isArray(lawyerData[key])
-          ? lawyerData[key]
-          : (lawyerData[key] || "")
-              .split(",")
-              .map((item) => item.trim())
-              .filter(Boolean);
-
-        if (formValues.length > 0 && !arraysEqual(formValues, originalValues)) {
-          data.append(key, formValues);
-        }
-      } else if (key === "profilePhoto" && formData.profilePhoto) {
-        data.append(key, formData.profilePhoto);
-      } else if (key === "email") {
-        if (formData.email && formData.email !== (lawyerData.email || "")) {
-          data.append(key, formData.email);
-        }
-      } else if (
-        formData[key] !== null &&
-        formData[key] !== "" &&
-        key !== "status" &&
-        formData[key].toString() !== (lawyerData[key] || "").toString()
-      ) {
-        data.append(key, formData[key]);
-      }
-
-      console.log("Adonany", key, formData[key]);
-    });
-
-    // Check if there are any fields to update
-    const hasUpdates = Array.from(data.entries()).length > 0;
-    if (!hasUpdates) {
-      setSuccessMessage("No changes to update");
-      setEditMode(false);
-      setTimeout(() => setSuccessMessage(""), 3000);
-      return;
-    }
-
-    try {
-      const response = await fetch(
-        `http://localhost:5000/api/users/lawyer/profile`,
-        {
-          method: "PUT",
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-          body: data,
-        }
-      );
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(
-          errorData.message || `Update failed (Status: ${response.status})`
+        setError(
+          err.response?.data?.message ||
+            err.message ||
+            "Failed to load lawyer profile"
         );
+        setLoading(false);
+        if (err.response?.status === 401) {
+          localStorage.removeItem("token");
+          navigate("/login");
+        }
       }
+    };
 
-      const result = await response.json();
-      setLawyerData(result.user);
-      setSuccessMessage("Lawyer profile updated successfully");
-      setEditMode(false);
-      setTimeout(() => setSuccessMessage(""), 3000);
-    } catch (err) {
-      console.error("Error updating profile:", err);
-      setError(err.message);
-    }
-  };
+    if (lawyerId) fetchLawyerProfile();
+  }, [lawyerId, navigate]);
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
+      <div className="flex justify-center items-center h-48">
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary"></div>
       </div>
     );
   }
 
-  if (error) {
+  if (error || !lawyer) {
     return (
-      <div className="text-center mt-16 text-red-600">
-        <p className="text-xl font-semibold">{error}</p>
+      <div className="max-w-3xl mx-auto mt-6 p-5 bg-red-50 rounded-lg text-center">
+        <p className="text-red-600 mb-3 text-lg">
+          {error || "Lawyer not found"}
+        </p>
         <Link
-          to="/lawyers"
-          className="mt-4 inline-block text-blue-500 hover:underline"
+          to="/client/lawyer"
+          className="text-primary hover:underline text-base"
         >
           Back to Lawyers List
         </Link>
@@ -226,101 +78,209 @@ export default function ClientLawyerProfile() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 font-sans">
-      {/* Header Section */}
-      <div className="bg-gradient-to-r from-primary to-primary/80 text-primary-foreground py-16">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-          <img
-            src={lawyerData.profile_photo || "https://via.placeholder.com/150"}
-            alt={lawyerData.username}
-            className="h-32 w-32 mx-auto rounded-full border-4 border-white shadow-lg mb-4"
-          />
-          <h1 className="text-4xl font-extrabold mb-2">
-            {lawyerData.username}
-          </h1>
-          <p className="text-lg text-gray-200 mb-4">
-            Specialization : {lawyerData.specialization.join(", ")}
-          </p>
-          <div className="flex items-center justify-center space-x-2 mb-2">
-            <Star className="h-6 w-6 text-yellow-300" />
-            <span className="text-xl font-semibold">
-              {lawyerData.averageRating.toFixed(1)}/5
-            </span>
-            <span className="text-gray-300">
-              ({lawyerData.ratingCount} reviews)
-            </span>
-          </div>
-          <div className="flex items-center justify-center space-x-2">
-            {lawyerData.isAvailable ? (
-              <CheckCircle className="h-6 w-6 text-green-400" />
-            ) : (
-              <XCircle className="h-6 w-6 text-red-400" />
-            )}
-            <span className="text-lg font-medium">
-              {lawyerData.isAvailable ? "I am Available" : "Not Available"}
-            </span>
+    <div className="max-w-6xl mx-auto px-6 py-5">
+      {/* Header with Left-aligned Profile */}
+      <div className="bg-white rounded-lg shadow-md overflow-hidden mb-6">
+        <div className="bg-gradient-to-r from-primary to-primary/80 p-5 text-white">
+          <div className="flex items-center">
+            <img
+              src={lawyer.profile_photo || "https://via.placeholder.com/150"}
+              alt={lawyer.username}
+              className="h-20 w-20 rounded-full object-cover border-2 border-white mr-5"
+            />
+            <div>
+              <h1 className="text-2xl font-bold mb-1">{lawyer.username}</h1>
+              <div className="flex items-center mb-1">
+                {[1, 2, 3, 4, 5].map((star) => (
+                  <Star
+                    key={star}
+                    size={18}
+                    className={
+                      star <= (lawyer.averageRating || 0)
+                        ? "text-yellow-300 fill-current"
+                        : "text-gray-300"
+                    }
+                  />
+                ))}
+                <span className="ml-2 text-sm">
+                  {lawyer.averageRating?.toFixed(1) || "0.0"} (
+                  {lawyer.ratingCount || 0} reviews)
+                </span>
+              </div>
+              <p className="text-gray-200 text-base">
+                {Array.isArray(lawyer.specialization)
+                  ? lawyer.specialization.join(", ")
+                  : "Legal Professional"}
+              </p>
+            </div>
           </div>
         </div>
       </div>
 
-      {/* Main Content */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          {/* Left Column - Profile Summary */}
-          <div className="lg:col-span-1">
-            <div className="bg-white rounded-lg shadow-lg p-6">
-                <>
-                  <p className="text-gray-600 mb-4">Bio : {lawyerData.bio}</p>
-                  <div className="space-y-4">
-                    <div className="flex items-center text-gray-600">
-                      <Briefcase className="h-5 w-5 text-gray-400 mr-2" />
-                      <span className="font-medium">
-                        Experience: {lawyerData.yearsOfExperience} years
+      {/* Main Content - Two Columns */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        {/* Left Column - Contact Info */}
+        <div className="md:col-span-1">
+          <div className="bg-white rounded-lg shadow-md p-5 mb-6">
+            <h2 className="text-lg font-semibold mb-4 border-b pb-2">
+              Contact Information
+            </h2>
+
+            <div className="space-y-4 text-base">
+              <div className="flex items-start">
+                <Mail className="h-5 w-5 text-gray-500 mt-0.5 mr-3" />
+                <div>
+                  <p className="text-sm text-gray-500">Email</p>
+                  <p className="text-gray-800">
+                    {lawyer.email || "Not provided"}
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-start">
+                <Phone className="h-5 w-5 text-gray-500 mt-0.5 mr-3" />
+                <div>
+                  <p className="text-sm text-gray-500">Phone</p>
+                  <p className="text-gray-800">
+                    {lawyer.phone || "Not provided"}
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-start">
+                <MapPin className="h-5 w-5 text-gray-500 mt-0.5 mr-3" />
+                <div>
+                  <p className="text-sm text-gray-500">Location</p>
+                  <p className="text-gray-800">
+                    {lawyer.location || "Not specified"}
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-start">
+                <Clock className="h-5 w-5 text-gray-500 mt-0.5 mr-3" />
+                <div>
+                  <p className="text-sm text-gray-500">Availability</p>
+                  <p
+                    className={
+                      lawyer.isAvailable
+                        ? "text-green-600 font-medium"
+                        : "text-red-500 font-medium"
+                    }
+                  >
+                    {lawyer.isAvailable ? "Available" : "Unavailable"}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-6 space-y-3">
+              <button
+                onClick={() => navigate(`/client/messages/${lawyerId}`)}
+                className="w-full flex items-center justify-center py-2.5 px-4 bg-primary text-white rounded-md text-sm font-medium hover:bg-primary/90 transition-colors"
+              >
+                <MessageSquare className="h-4 w-4 mr-2" />
+                Message Lawyer
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Right Column - Profile Details */}
+        <div className="md:col-span-2">
+          <div className="bg-white rounded-lg shadow-md p-5 mb-6">
+            <h2 className="text-lg font-semibold mb-4 border-b pb-2">
+              Professional Profile
+            </h2>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-base">
+              <div>
+                <h3 className="text-base font-medium mb-2">About</h3>
+                <p className="text-gray-700 mb-4 max-h-32 overflow-y-auto">
+                  {lawyer.bio || "No bio information provided."}
+                </p>
+
+                <h3 className="text-base font-medium mb-2">Experience</h3>
+                <div className="flex items-center mb-4">
+                  <Briefcase className="h-5 w-5 text-gray-500 mr-2" />
+                  <span className="text-gray-700">
+                    {lawyer.yearsOfExperience
+                      ? `${lawyer.yearsOfExperience} years`
+                      : "Not provided"}
+                  </span>
+                </div>
+
+                <h3 className="text-base font-medium mb-2">Education</h3>
+                <p className="text-gray-700 max-h-24 overflow-y-auto">
+                  {lawyer.education || "Not provided."}
+                </p>
+              </div>
+
+              <div>
+                <h3 className="text-base font-medium mb-2">Specializations</h3>
+                <div className="flex flex-wrap gap-2 mb-4 max-h-24 overflow-y-auto">
+                  {Array.isArray(lawyer.specialization) &&
+                  lawyer.specialization.length > 0 ? (
+                    lawyer.specialization.map((spec, index) => (
+                      <span
+                        key={index}
+                        className="bg-primary/10 text-primary px-3 py-1 rounded-full text-sm"
+                      >
+                        {spec}
                       </span>
-                    </div>
-                    <div className="flex items-center text-gray-600">
-                      <MapPin className="h-5 w-5 text-gray-400 mr-2" />
-                      <span className="font-medium">
-                        Location: {lawyerData.location}
+                    ))
+                  ) : (
+                    <p className="text-gray-500">None listed</p>
+                  )}
+                </div>
+
+                <h3 className="text-base font-medium mb-2">Languages</h3>
+                <div className="flex flex-wrap gap-2 max-h-24 overflow-y-auto">
+                  {Array.isArray(lawyer.languages) &&
+                  lawyer.languages.length > 0 ? (
+                    lawyer.languages.map((lang, index) => (
+                      <span
+                        key={index}
+                        className="bg-gray-100 text-gray-700 px-3 py-1 rounded-full text-sm"
+                      >
+                        {lang}
                       </span>
-                    </div>
-                    <div className="flex items-center text-gray-600">
-                      <DollarSign className="h-5 w-5 text-gray-400 mr-2" />
-                      <span className="font-medium">
-                        Hourly Rate: ${lawyerData.hourlyRate}
-                      </span>
-                    </div>
-                    <div className="flex items-center text-gray-600">
-                      <Globe className="h-5 w-5 text-gray-400 mr-2" />
-                      <span className="font-medium">
-                        Languages: {lawyerData.languages.join(", ")}
-                      </span>
-                    </div>
-                  </div>
-                </>
-  
+                    ))
+                  ) : (
+                    <p className="text-gray-500">None listed</p>
+                  )}
+                </div>
+              </div>
             </div>
           </div>
 
-          {/* Right Column - Professional Details */}
-          <div className="lg:col-span-2">
-            <div className="bg-white rounded-lg shadow-lg p-6">
-              <h2 className="text-2xl font-semibold text-gray-800 mb-4">
-                Professional Details
-              </h2>
-              {!editMode ? (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div className="text-gray-600">
-                    <p className="font-medium">
-                      Certifications: {lawyerData.certifications.join(", ")}
-                    </p>
-                  </div>
-                </div>
-              ) : null}
+          {/* Reviews Section */}
+          <div className="bg-white rounded-lg shadow-md p-5">
+            <div className="flex justify-between items-center mb-4 border-b pb-2">
+              <h2 className="text-lg font-semibold">Client Reviews</h2>
+              <div className="flex items-center">
+                <Star className="h-5 w-5 text-yellow-400 fill-current" />
+                <span className="ml-2 text-base font-medium">
+                  {lawyer.averageRating?.toFixed(1) || "0.0"}
+                </span>
+              </div>
             </div>
+
+            {lawyer.ratingCount > 0 ? (
+              <p className="text-gray-700">
+                This lawyer has received {lawyer.ratingCount} reviews from
+                clients.
+              </p>
+            ) : (
+              <div className="text-center py-6">
+                <User className="h-12 w-12 text-gray-300 mx-auto mb-2" />
+                <p className="text-gray-500 text-base">No reviews yet</p>
+              </div>
+            )}
           </div>
         </div>
       </div>
     </div>
   );
 }
+

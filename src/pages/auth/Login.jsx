@@ -44,9 +44,60 @@ const Login = () => {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-100">
-      <div className="bg-white p-8 rounded-lg shadow-lg w-full max-w-md">
-        <h2 className="text-2xl font-bold mb-6 text-center text-gray-800">Login</h2>
+    <div
+      style={{
+        fontFamily: "Inter, sans-serif",
+        backgroundColor: "#F3F4F6",
+        minHeight: "100vh",
+        display: "flex",
+        justifyContent: "center",
+        alignItems: "center",
+        padding: "1.5rem 1rem",
+      }}
+    >
+      <div
+        style={{
+          maxWidth: "28rem",
+          width: "100%",
+          backgroundColor: "#FFFFFF",
+          borderRadius: "0.5rem",
+          boxShadow: "0 4px 6px rgba(0, 0, 0, 0.1)",
+          padding: "1.5rem",
+        }}
+      >
+     
+        <div className="flex justify-center items-center mb-0">
+          <img
+            src="/Logo.png"
+            alt="LegalConnect Ethiopia Logo"
+            className="h-25 w-32"
+          />
+        </div>
+        
+        <h2
+          style={{
+            fontSize: "1.5rem",
+            fontWeight: "bold",
+            textAlign: "center",
+            color: "#111827",
+            marginBottom: "1.5rem",
+            marginTop: "0 rem",
+          }}
+        >
+          Login
+        </h2>
+        
+        {error && (
+          <p
+            style={{
+              color: "#EF4444",
+              textAlign: "center",
+              marginBottom: "1rem",
+            }}
+          >
+            {error}
+          </p>
+        )}
         <form onSubmit={handleSubmit}>
           <div className="mb-4">
             <label htmlFor="email" className="block text-sm font-medium text-gray-700">

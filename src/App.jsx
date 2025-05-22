@@ -177,7 +177,7 @@ function AppRoutes() {
             path="/client/messages"
             element={
               <ProtectedRoute allowedRoles={["Client"]}>
-                <MessagesPage />
+                <MessagePage />
               </ProtectedRoute>
             }
           />
@@ -261,14 +261,14 @@ function AppRoutes() {
               </ProtectedRoute>
             }
           />
-          <Route
+          {/* <Route
             path="/lawyer/messages"
             element={
               <ProtectedRoute allowedRoles={["Lawyer"]}>
                 <MessagesPage />
               </ProtectedRoute>
             }
-          />
+          /> */}
           <Route
             path="/lawyer/profile/:lawyerId"
             element={
@@ -311,3 +311,16 @@ function App() {
 }
 
 export default App;
+
+
+
+
+
+
+
+
+
+
+
+
+

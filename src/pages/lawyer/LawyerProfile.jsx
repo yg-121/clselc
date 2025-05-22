@@ -16,6 +16,7 @@ import {
   X,
   XCircle,
   CheckCircle,
+  Star,
 } from "lucide-react";
 
 // Add custom styles

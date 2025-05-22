@@ -218,17 +218,12 @@ export default function LawyerHome({ userName }) {
             </div>
             <div className="mt-4 md:mt-0 flex space-x-3">
               <Link
-                to="/lawyer/profile"
-                className="inline-flex items-center px-4 py-2 border border-transparent rounded-lg text-sm font-medium text-primary bg-white hover:bg-gray-100"
-              >
-                View Profile
-              </Link>
-              <Link
                 to="/lawyer/lawyerCase"
                 className="inline-flex items-center px-4 py-2 border border-white rounded-lg text-sm font-medium text-white hover:bg-primary/90"
               >
-                Browse Cases
+                Here are cases on your hand
               </Link>
+              
             </div>
           </div>
         </div>
@@ -488,7 +483,7 @@ export default function LawyerHome({ userName }) {
                   </Link>
 
                   <Link
-                    to="/lawyer/bids"
+                    to="/lawyer/my-bids"
                     className="flex flex-col items-center p-4 border border-gray-200 rounded-lg hover:bg-gray-50 hover:border-primary transition-all duration-300"
                   >
                     <DollarSign className="h-6 w-6 text-blue-500 mb-2" />

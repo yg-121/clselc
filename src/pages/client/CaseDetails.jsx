@@ -1,10 +1,54 @@
-import { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
-import {File,MessageSquare,Calendar,Plus,User,Edit,ChevronDown,ChevronUp,CheckCircle,X,Trash2,} from "lucide-react";
-import CaseDocument from "./CaseDocument";
-import AppointmentsPage from "../common/Appointments";
+import {
+  File, MessageSquare, Calendar, Plus, User, Edit,
+  ChevronDown, ChevronUp, CheckCircle, X, Trash2, AlertTriangle, FileText,
+  ExternalLink, Award, Clock, DollarSign, ThumbsUp, Shield, Briefcase, Tag, Star
+} from "lucide-react";  
+import DocumentsTab from "../../components/case/DocumentsTab";
+import NotesTab from "../../components/case/NotesTab";
+import AppointmentsTab from "../../components/case/AppointmentsTab";
+// import { ErrorBoundary } from "react-error-boundary";
 
-// Helper function to map status to color
+// Instead, let's create a simple error boundary component
+class SimpleErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+
+  static getDerivedStateFromError(error) {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error, errorInfo) {
+    console.error("Error caught by boundary:", error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="p-4 bg-red-50 text-red-600 rounded-lg">
+          <h3 className="font-medium mb-2">Something went wrong:</h3>
+          <p className="mb-4">{this.state.error?.message || "Unknown error"}</p>
+          <button
+            onClick={() => {
+              this.setState({ hasError: false, error: null });
+              if (this.props.onReset) this.props.onReset();
+            }}
+            className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 transition-colors"
+          >
+            Try again
+          </button>
+        </div>
+      );
+    }
+
+    return this.props.children;
+  }
+}
+
+// Helper functions
 const getStatusColor = (status) => {
   switch (status.toLowerCase()) {
     case "posted":
@@ -18,57 +62,119 @@ const getStatusColor = (status) => {
   }
 };
 
-// Helper function to check if a deadline is overdue
 const isOverdue = (deadlineDate) => {
-  const currentDate = new Date("2025-04-29T00:00:00.000Z"); // Current date as per context
+  const currentDate = new Date();
   return new Date(deadlineDate) < currentDate;
+};
+
+const formatDate = (dateString) => {
+  if (!dateString) return "N/A";
+  const date = new Date(dateString);
+  return date.toLocaleDateString("en-US", {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+  });
+};
+
+const formatCurrency = (amount) => {
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "ETB",
+  }).format(amount);
 };
 
 export default function CaseDetails() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const [caseItem, setCaseItem] = useState(null);
+  const [caseDetail, setCaseDetail] = useState(null);
   const [bids, setBids] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [isDocsOpen, setIsDocsOpen] = useState(false);
-  const [acceptLoading, setAcceptLoading] = useState(null);
-  const [acceptError, setAcceptError] = useState(null);
-  const [acceptSuccess, setAcceptSuccess] = useState(null);
+  const [activeTab, setActiveTab] = useState("overview");
+  
+  // Modals state
+  const [isCloseModalOpen, setIsCloseModalOpen] = useState(false);
+  const [isAddNoteModalOpen, setIsAddNoteModalOpen] = useState(false);
+  const [isAddAppointmentModalOpen, setIsAddAppointmentModalOpen] = useState(false);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [isEditingCase, setIsEditingCase] = useState(false);
+  
+  // Form states
   const [updateForm, setUpdateForm] = useState({
     description: "",
     category: "",
     deadline: "",
   });
+  const [noteForm, setNoteForm] = useState({
+    content: "",
+    visibility: "Both",
+  });
+  
+  // Loading and error states
+  const [acceptLoading, setAcceptLoading] = useState(null);
+  const [acceptError, setAcceptError] = useState(null);
+  const [acceptSuccess, setAcceptSuccess] = useState(null);
   const [updateLoading, setUpdateLoading] = useState(false);
   const [updateError, setUpdateError] = useState(null);
   const [updateSuccess, setUpdateSuccess] = useState(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [deleteError, setDeleteError] = useState(null);
-  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [closeLoading, setCloseLoading] = useState(false);
   const [closeError, setCloseError] = useState(null);
   const [closeSuccess, setCloseSuccess] = useState(null);
-  const [isCloseModalOpen, setIsCloseModalOpen] = useState(false);
-  const [isAddNoteModalOpen, setIsAddNoteModalOpen] = useState(false);
-  const [noteForm, setNoteForm] = useState({
-    content: "",
-    visibility: "Both",
-  });
   const [addNoteLoading, setAddNoteLoading] = useState(false);
   const [addNoteError, setAddNoteError] = useState(null);
   const [addNoteSuccess, setAddNoteSuccess] = useState(null);
+  
+  // Appointments states
+  const [appointments, setAppointments] = useState([]);
+  const [appointmentsLoading, setAppointmentsLoading] = useState(false);
+  const [appointmentsError, setAppointmentsError] = useState(null);
+  const [showAppointmentActions, setShowAppointmentActions] = useState(null);
+  const appointmentActionsRef = useRef(null);
+  const [selectedAppointment, setSelectedAppointment] = useState(null);
+  const [isRescheduleModalOpen, setIsRescheduleModalOpen] = useState(false);
+  const [rescheduleForm, setRescheduleForm] = useState({
+    date: "",
+    time: "",
+    duration: 60,
+    location: "",
+    description: "",
+  });
+  const [rescheduleLoading, setRescheduleLoading] = useState(false);
+  const [rescheduleError, setRescheduleError] = useState(null);
+  const [rescheduleSuccess, setRescheduleSuccess] = useState(null);
+  const [appointmentActionLoading, setAppointmentActionLoading] = useState(false);
+  const [appointmentActionError, setAppointmentActionError] = useState(null);
+
+  // Add these state variables to your component
+  const [uploadForm, setUploadForm] = useState({
+    visibility: "Both",
+    category: "Evidence"
+  });
+  const [files, setFiles] = useState([]);
+  const [uploadLoading, setUploadLoading] = useState(false);
+  const [uploadError, setUploadError] = useState(null);
+  const [uploadSuccess, setUploadSuccess] = useState(null);
+  const fileInputRef = useRef(null);
+
+  // Add these state variables to your component
+  const [showRatingInCloseModal, setShowRatingInCloseModal] = useState(true);
+  const [ratingValue, setRatingValue] = useState(0);
+  const [ratingHover, setRatingHover] = useState(0);
+  const [ratingComment, setRatingComment] = useState("");
 
   // Function to fetch case and bids data
   const fetchCaseDetails = async () => {
     try {
+      setLoading(true);
       const token = localStorage.getItem("token");
       if (!token) {
         throw new Error("Authentication token not found. Please log in.");
       }
 
-      console.log("Fetching case details for caseId:", id);
       const caseRes = await fetch(`http://localhost:5000/api/cases/${id}`, {
         headers: {
           Authorization: `Bearer ${token}`,
@@ -81,11 +187,11 @@ export default function CaseDetails() {
       }
 
       const caseData = await caseRes.json();
-      setCaseItem(caseData.case);
+      setCaseDetail(caseData.case);
       setUpdateForm({
         description: caseData.case.description,
         category: caseData.case.category,
-        deadline: caseData.case.deadline.split("T")[0],
+        deadline: caseData.case.deadline?.split("T")[0] || "",
       });
 
       const bidsRes = await fetch(`http://localhost:5000/api/bids/case/${id}`, {
@@ -109,10 +215,86 @@ export default function CaseDetails() {
     }
   };
 
+  const fetchAppointments = async () => {
+    try {
+      setAppointmentsLoading(true);
+      setAppointmentsError(null);
+
+      const token = localStorage.getItem("token");
+      if (!token) {
+        throw new Error("Authentication token not found. Please log in.");
+      }
+
+      const response = await fetch(`http://localhost:5000/api/appointments/case/${id}`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || "Failed to fetch appointments.");
+      }
+
+      const data = await response.json();
+      console.log("Fetched appointments:", data);
+      
+      // Ensure we're setting an array
+      if (Array.isArray(data.appointments)) {
+        setAppointments(data.appointments);
+      } else if (data.appointments) {
+        console.warn("API returned non-array appointments, converting to array");
+        setAppointments([data.appointments]);
+      } else {
+        console.warn("API returned no appointments, setting empty array");
+        setAppointments([]);
+      }
+    } catch (err) {
+      console.error("Error fetching appointments:", err);
+      setAppointmentsError(err.message);
+      // Set empty array on error
+      setAppointments([]);
+    } finally {
+      setAppointmentsLoading(false);
+    }
+  };
+
   useEffect(() => {
     fetchCaseDetails();
   }, [id]);
 
+  useEffect(() => {
+    if (activeTab === "appointments" && caseDetail?.status === "Assigned") {
+      fetchAppointments();
+    }
+  }, [activeTab, id, caseDetail?.status]);
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (
+        appointmentActionsRef.current &&
+        !appointmentActionsRef.current.contains(event.target)
+      ) {
+        setShowAppointmentActions(null);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  // Add a useEffect to ensure appointments is always an array
+  useEffect(() => {
+    // Log the appointments data to debug
+    console.log("Appointments data:", appointments);
+    
+    // If appointments is not an array, initialize it as an empty array
+    if (!Array.isArray(appointments)) {
+      console.warn("Appointments is not an array, initializing as empty array");
+      setAppointments([]);
+    }
+  }, [appointments]);
+
+  // Handle functions
   const handleAcceptBid = async (bidId) => {
     try {
       setAcceptLoading(bidId);
@@ -124,7 +306,6 @@ export default function CaseDetails() {
         throw new Error("Authentication token not found. Please log in.");
       }
 
-      console.log("Accepting bid with bidId:", bidId);
       const res = await fetch(
         `http://localhost:5000/api/bids/accept/${bidId}`,
         {
@@ -152,7 +333,7 @@ export default function CaseDetails() {
       );
       
       // Update case status in the UI
-      setCaseItem(prevCase => ({
+      setCaseDetail(prevCase => ({
         ...prevCase,
         status: 'Assigned',
         winning_bid: bidId,
@@ -161,7 +342,7 @@ export default function CaseDetails() {
 
       // Reload the page after a short delay to show the updated status
       setTimeout(() => {
-        window.location.reload();
+        fetchCaseDetails();
       }, 2000);
     } catch (error) {
       console.error("Error accepting bid:", error);
@@ -183,7 +364,6 @@ export default function CaseDetails() {
         throw new Error("Authentication token not found. Please log in.");
       }
 
-      console.log("Updating case with caseId:", id, "Data:", updateForm);
       const res = await fetch(`http://localhost:5000/api/cases/${id}`, {
         method: "PUT",
         headers: {
@@ -224,7 +404,7 @@ export default function CaseDetails() {
         throw new Error("Authentication token not found. Please log in.");
       }
 
-      console.log("Closing case with caseId:", id);
+      // First close the case
       const res = await fetch(`http://localhost:5000/api/cases/${id}/close`, {
         method: "PATCH",
         headers: {
@@ -240,6 +420,32 @@ export default function CaseDetails() {
       const data = await res.json();
       setCloseSuccess(data.message);
 
+      // If rating was provided, submit it
+      if (showRatingInCloseModal && ratingValue > 0 && caseDetail.assigned_lawyer) {
+        try {
+          const ratingRes = await fetch("http://localhost:5000/api/ratings", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify({
+              caseId: id,
+              rating: ratingValue,
+              comment: ratingComment.trim() || undefined,
+            }),
+          });
+
+          if (!ratingRes.ok) {
+            const errorData = await ratingRes.json();
+            console.error("Rating submission error:", errorData);
+            // We don't throw here to avoid preventing case closure
+          }
+        } catch (ratingErr) {
+          console.error("Error submitting rating:", ratingErr);
+        }
+      }
+
       await fetchCaseDetails();
     } catch (err) {
       console.error("Error closing case:", err);
@@ -247,6 +453,10 @@ export default function CaseDetails() {
     } finally {
       setCloseLoading(false);
       setIsCloseModalOpen(false);
+      // Reset rating state
+      setRatingValue(0);
+      setRatingHover(0);
+      setRatingComment("");
     }
   };
 
@@ -260,7 +470,6 @@ export default function CaseDetails() {
         throw new Error("Authentication token not found. Please log in.");
       }
 
-      console.log("Deleting case with caseId:", id);
       const res = await fetch(`http://localhost:5000/api/cases/${id}`, {
         method: "DELETE",
         headers: {
@@ -284,9 +493,20 @@ export default function CaseDetails() {
     }
   };
 
-  const handleAddNote = async (e) => {
-    e.preventDefault();
+  const handleAddNote = async (noteData) => {
     try {
+      // Check if noteData is provided and has content
+      if (noteData && !noteData.content) {
+        console.log("Note data received but missing content:", noteData);
+        return; // Exit early if no content
+      }
+      
+      // If no noteData and using form, check if form has content
+      if (!noteData && (!noteForm || !noteForm.content)) {
+        console.log("No note content in form:", noteForm);
+        return; // Exit early if no content
+      }
+
       setAddNoteLoading(true);
       setAddNoteError(null);
       setAddNoteSuccess(null);
@@ -296,42 +516,259 @@ export default function CaseDetails() {
         throw new Error("Authentication token not found. Please log in.");
       }
 
-      console.log("Adding note to caseId:", id, "Data:", noteForm);
+      // If noteData is provided, use it; otherwise, use the noteForm state
+      const noteToSubmit = noteData || noteForm;
+      
+      console.log("Submitting note:", noteToSubmit);
+
       const res = await fetch(`http://localhost:5000/api/cases/${id}/notes`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify(noteForm),
+        body: JSON.stringify(noteToSubmit),
       });
 
       if (!res.ok) {
         const errorData = await res.json();
-        if (res.status === 401 || res.status === 403) {
-          throw new Error("Session expired. Please log in again.");
-        }
         throw new Error(errorData.message || "Failed to add note.");
       }
 
       const data = await res.json();
       setAddNoteSuccess(data.message);
-
-      await fetchCaseDetails();
-
-      setTimeout(() => {
-        setIsAddNoteModalOpen(false);
+      
+      // Reset form if using the form state
+      if (!noteData) {
         setNoteForm({ content: "", visibility: "Both" });
-      }, 1500);
+      }
+      
+      // Refresh case details to show the new note
+      await refreshCaseDetails();
+      
+      // If using the modal, close it after a delay
+      if (isAddNoteModalOpen) {
+        setTimeout(() => {
+          setIsAddNoteModalOpen(false);
+        }, 1500);
+      }
     } catch (err) {
       console.error("Error adding note:", err);
       setAddNoteError(err.message);
-      if (err.message.includes("log in")) {
-        localStorage.removeItem("token");
-        window.location.href = "/login";
-      }
     } finally {
       setAddNoteLoading(false);
+    }
+  };
+
+  const handleAddAppointment = async (appointmentData) => {
+    try {
+      setAddAppointmentLoading(true);
+      setAddAppointmentError(null);
+      setAddAppointmentSuccess(null);
+
+      const token = localStorage.getItem("token");
+      if (!token) {
+        throw new Error("Authentication token not found. Please log in.");
+      }
+
+      // Validate required fields
+      if (!appointmentData.date) {
+        throw new Error("Date is required for the appointment");
+      }
+
+      // Create appointment payload
+      const payload = {
+        client: caseDetail.client._id,
+        lawyer: caseDetail.assigned_lawyer._id,
+        case: id,
+        date: appointmentData.date,
+        time: appointmentData.time,
+        duration: appointmentData.duration || 60,
+        type: appointmentData.type || "Meeting",
+        location: appointmentData.location || "Online",
+        description: appointmentData.description || ""
+      };
+
+      const res = await fetch(`http://localhost:5000/api/appointments`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(payload),
+      });
+
+      if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(errorData.message || "Failed to create appointment.");
+      }
+
+      const data = await res.json();
+      setAddAppointmentSuccess(data.message || "Appointment created successfully");
+      
+      // Refresh appointments list
+      await fetchAppointments();
+      
+      // Close modal after a delay
+      setTimeout(() => {
+        setIsAddAppointmentModalOpen(false);
+      }, 1500);
+    } catch (err) {
+      console.error("Error creating appointment:", err);
+      setAddAppointmentError(err.message);
+    } finally {
+      setAddAppointmentLoading(false);
+    }
+  };
+
+  const handleRescheduleAppointment = async (appointmentId, newData) => {
+    try {
+      const token = localStorage.getItem("token");
+      if (!token) {
+        throw new Error("Authentication token not found. Please log in.");
+      }
+
+      const res = await fetch(`http://localhost:5000/api/appointments/${appointmentId}/reschedule`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(newData),
+      });
+
+      if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(errorData.message || "Failed to reschedule appointment.");
+      }
+
+      // Refresh appointments list
+      await fetchAppointments();
+      
+      return true; // Indicate success
+    } catch (err) {
+      console.error("Error rescheduling appointment:", err);
+      return false; // Indicate failure
+    }
+  };
+
+  const handleConfirmAppointment = async (appointmentId) => {
+    try {
+      const token = localStorage.getItem("token");
+      if (!token) {
+        throw new Error("Authentication token not found. Please log in.");
+      }
+
+      const res = await fetch(`http://localhost:5000/api/appointments/${appointmentId}/confirm`, {
+        method: "PATCH",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(errorData.message || "Failed to confirm appointment.");
+      }
+
+      // Refresh appointments list
+      await fetchAppointments();
+      
+      return true; // Indicate success
+    } catch (err) {
+      console.error("Error confirming appointment:", err);
+      return false; // Indicate failure
+    }
+  };
+
+  const handleCancelAppointment = async (appointmentId) => {
+    try {
+      const token = localStorage.getItem("token");
+      if (!token) {
+        throw new Error("Authentication token not found. Please log in.");
+      }
+
+      const res = await fetch(`http://localhost:5000/api/appointments/${appointmentId}/cancel`, {
+        method: "PATCH",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(errorData.message || "Failed to cancel appointment.");
+      }
+
+      // Refresh appointments list
+      await fetchAppointments();
+      
+      return true; // Indicate success
+    } catch (err) {
+      console.error("Error canceling appointment:", err);
+      return false; // Indicate failure
+    }
+  };
+
+  const handleCompleteAppointment = async (appointmentId) => {
+    try {
+      const token = localStorage.getItem("token");
+      if (!token) {
+        throw new Error("Authentication token not found. Please log in.");
+      }
+
+      const res = await fetch(`http://localhost:5000/api/appointments/${appointmentId}/complete`, {
+        method: "PATCH",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(errorData.message || "Failed to mark appointment as completed.");
+      }
+
+      // Refresh appointments list
+      await fetchAppointments();
+      
+      return true; // Indicate success
+    } catch (err) {
+      console.error("Error completing appointment:", err);
+      return false; // Indicate failure
+    }
+  };
+
+  const downloadICSFile = async (appointmentId) => {
+    try {
+      const token = localStorage.getItem("token");
+      if (!token) {
+        throw new Error("Authentication token not found. Please log in.");
+      }
+
+      const res = await fetch(`http://localhost:5000/api/appointments/${appointmentId}/ics`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(errorData.message || "Failed to download calendar file.");
+      }
+
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.style.display = 'none';
+      a.href = url;
+      a.download = `appointment-${appointmentId}.ics`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error("Error downloading ICS file:", err);
+      alert("Failed to download calendar file: " + err.message);
     }
   };
 
@@ -339,128 +776,468 @@ export default function CaseDetails() {
     setIsDocsOpen(!isDocsOpen);
   };
 
+  const refreshCaseDetails = async () => {
+    try {
+      setLoading(true);
+      const token = localStorage.getItem("token");
+      if (!token) {
+        throw new Error("Authentication token not found. Please log in.");
+      }
+
+      const caseRes = await fetch(`http://localhost:5000/api/cases/${id}`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (!caseRes.ok) {
+        const errorData = await caseRes.json();
+        throw new Error(errorData.message || "Failed to fetch case details.");
+      }
+
+      const caseData = await caseRes.json();
+      setCaseDetail(caseData.case);
+      setUpdateForm({
+        description: caseData.case.description,
+        category: caseData.case.category,
+        deadline: caseData.case.deadline?.split("T")[0] || "",
+      });
+
+      const bidsRes = await fetch(`http://localhost:5000/api/bids/case/${id}`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (!bidsRes.ok) {
+        const errorData = await bidsRes.json();
+        throw new Error(errorData.message || "Failed to fetch bids.");
+      }
+
+      const bidsData = await bidsRes.json();
+      setBids(bidsData);
+    } catch (err) {
+      console.error("Error fetching case details or bids:", err);
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   if (loading) {
     return (
-      <div className="flex justify-center items-center h-64">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-gray-700"></div>
+      <div className="flex items-center justify-center h-screen">
+        <div className="flex flex-col items-center">
+          <div className="animate-spin rounded-full h-16 w-16 border-t-4 border-b-4 border-primary mb-4"></div>
+          <p className="text-gray-600 text-lg">Loading case details...</p>
+        </div>
       </div>
     );
   }
 
   if (error) {
-    return <div className="text-red-600 text-center mt-4">{error}</div>;
+    return (
+      <div className="flex flex-col items-center justify-center h-screen bg-gray-50">
+        <div className="bg-white p-8 rounded-lg shadow-lg max-w-md w-full">
+          <div className="flex items-center justify-center text-red-500 mb-4">
+            <AlertTriangle size={48} />
+          </div>
+          <h2 className="text-2xl font-bold text-center text-gray-800 mb-4">
+            Error Loading Case
+          </h2>
+          <p className="text-gray-600 text-center mb-6">{error}</p>
+          <div className="flex justify-center">
+            <Link
+              to="/client/cases"
+              className="px-6 py-3 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-lg shadow-md hover:from-blue-600 hover:to-blue-700 transition-all duration-300"
+            >
+              Back to Cases
+            </Link>
+          </div>
+        </div>
+      </div>
+    );
   }
 
-  if (!caseItem) {
+  if (!caseDetail) {
     return (
-      <div className="text-center mt-4 text-gray-600">Case not found.</div>
+      <div className="flex flex-col items-center justify-center h-screen bg-gray-50">
+        <div className="bg-white p-8 rounded-lg shadow-lg max-w-md w-full">
+          <h2 className="text-2xl font-bold text-center text-gray-800 mb-4">
+            No Case Found
+          </h2>
+          <p className="text-gray-600 text-center mb-6">
+            No case details available.
+          </p>
+          <div className="flex justify-center">
+            <Link
+              to="/client/cases"
+              className="px-6 py-3 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-lg shadow-md hover:from-blue-600 hover:to-blue-700 transition-all duration-300"
+            >
+              Back to Cases
+            </Link>
+          </div>
+        </div>
+      </div>
     );
   }
 
   return (
-    <div className="font-inter bg-white text-gray-800 p-6 max-w-3xl mx-auto min-h-screen">
-      {/* Case Overview and Client Information */}
-      <div className="bg-white border border-gray-300 rounded-lg shadow-md p-6 mb-6 hover:shadow-lg hover:scale-101 transition-all duration-300">
-         {console.log(caseItem)}
-        <div className="flex justify-between">
-          <div className="flex-1">
-            <div className="flex items-center justify-between mb-4">
-              <h1 className="text-2xl font-bold text-gray-800">
-                {caseItem.category}
-              </h1>
-              <span
-                className={`px-4 py-1.5 text-sm text-white rounded-full ${getStatusColor(
-                  caseItem.status
-                )}`}
-              >
-                {caseItem.status}
+    <div className="font-inter bg-gray-50 text-gray-800 p-6 max-w-6xl mx-auto min-h-screen">
+      {/* Case Header */}
+      <div className="bg-white border border-gray-200 rounded-lg shadow-md overflow-hidden mb-6">
+        <div className="bg-gradient-to-r from-blue-50 to-indigo-50 p-6 border-b border-gray-200">
+          <div className="flex justify-between items-center mb-4">
+            <h1 className="text-2xl font-bold text-gray-800 flex items-center">
+              <Briefcase className="w-6 h-6 mr-2 text-blue-500" />
+              {caseDetail.category}
+            </h1>
+            <span
+              className={`px-4 py-1.5 text-sm font-medium text-white rounded-full shadow-sm ${getStatusColor(
+                caseDetail.status
+              )}`}
+            >
+              {caseDetail.status}
+            </span>
+          </div>
+          <p className="text-gray-700 mb-4 bg-white p-4 rounded-lg border border-gray-100 shadow-sm">
+            {caseDetail.description}
+          </p>
+          <div className="flex flex-wrap gap-4 mb-4">
+            <div className="flex items-center text-gray-700 bg-white px-3 py-2 rounded-lg border border-gray-100 shadow-sm">
+              <Calendar className="w-5 h-5 mr-2 text-blue-500" />
+              <span>
+                <span className="font-medium">Deadline:</span>{" "}
+                <span className={isOverdue(caseDetail.deadline) ? "text-red-600 font-medium" : ""}>
+                  {formatDate(caseDetail.deadline)}
+                </span>
               </span>
             </div>
-            <p className="text-gray-600 mb-2 italic">{caseItem.description}</p>
-            <div className="flex space-x-4 mb-4 text-sm text-gray-600">
-              <p className="flex items-center">
-                <Calendar className="mr-2 h-4 w-4 text-gray-700" />
-                <span className="font-medium">Deadline:</span>{" "}
-                {new Date(caseItem.deadline).toLocaleDateString()}
-              </p>
-              <p className="flex items-center">
-                <Calendar className="mr-2 h-4 w-4 text-gray-700" />
-                <span className="font-medium">Created:</span>{" "}
-                {new Date(caseItem.createdAt).toLocaleDateString()}
-              </p>
-              <p className="flex items-center">
-                <Calendar className="mr-2 h-4 w-4 text-gray-700" />
-                <span className="font-medium">Last Updated:</span>{" "}
-                {new Date(caseItem.updatedAt).toLocaleDateString()}
-              </p>
-            </div>
-            <h2 className="text-lg font-semibold mb-2 flex items-center">
-              <User className="mr-2 h-4 w-4 text-gray-700" />
-              <p className="text-sm text-gray-600">
-                {caseItem.client.username}
-              </p>
-            </h2>
-            <h2 className="text-lg font-semibold mb-2 flex items-center">
-              <p className="text-sm text-gray-600 mb-4">
-                Email: {caseItem.client.email}
-              </p>
-            </h2>
+            {caseDetail.assigned_lawyer && (
+              <div className="flex items-center text-gray-700 bg-white px-3 py-2 rounded-lg border border-gray-100 shadow-sm">
+                <User className="w-5 h-5 mr-2 text-blue-500" />
+                <span>
+                  <span className="font-medium">Lawyer:</span>{" "}
+                  {caseDetail.assigned_lawyer.username}
+                </span>
+              </div>
+            )}
           </div>
-          <div className="self-end flex flex-col space-y-4">
-            {caseItem.status !== "Assigned" && caseItem.status !== "Closed" && (
+          <div className="flex flex-wrap gap-2">
+            {caseDetail.status === "Posted" && (
               <button
                 onClick={() => setIsEditingCase(true)}
-                className="inline-flex items-center px-3 py-1 bg-gradient-to-r from-gray-700 to-gray-800 text-white rounded-lg shadow-md hover:from-gray-800 hover:to-gray-900 hover:scale-105 transition-all duration-300"
+                className="px-4 py-2 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-md hover:from-blue-600 hover:to-blue-700 transition-all duration-300 shadow-sm hover:shadow flex items-center"
               >
-                <Edit className="h-4 w-4 mr-2" /> Update Case
+                <Edit className="w-4 h-4 inline mr-1" /> Edit Case
               </button>
             )}
-            {caseItem.status === "Assigned" && (
+            {caseDetail.status === "Assigned" && (
               <button
                 onClick={() => setIsCloseModalOpen(true)}
+                className="px-4 py-2 bg-gradient-to-r from-green-500 to-green-600 text-white rounded-md hover:from-green-600 hover:to-green-700 transition-all duration-300 shadow-sm hover:shadow flex items-center"
                 disabled={closeLoading}
-                className={`inline-flex items-center px-3 py-1 bg-gradient-to-r from-gray-700 to-gray-800 text-white rounded-lg shadow-md hover:from-gray-800 hover:to-gray-900 hover:scale-105 transition-all duration-300 ${
-                  closeLoading ? "opacity-50 cursor-not-allowed" : ""
-                }`}
               >
-                <X className="h-4 w-4 mr-2" /> Close Case
+                {closeLoading ? (
+                  <div className="flex items-center">
+                    <div className="animate-spin rounded-full h-4 w-4 border-t-2 border-b-2 border-white mr-2"></div>
+                    Processing...
+                  </div>
+                ) : (
+                  <>
+                    <CheckCircle className="w-4 h-4 inline mr-1" /> Close Case
+                  </>
+                )}
               </button>
             )}
-            <button
-              onClick={() => setIsDeleteModalOpen(true)}
-              disabled={deleteLoading}
-              className={`inline-flex items-center px-3 py-1 bg-gradient-to-r from-red-600 to-red-700 text-white rounded-lg shadow-md hover:from-red-700 hover:to-red-800 hover:scale-105 transition-all duration-300 ${
-                deleteLoading ? "opacity-50 cursor-not-allowed" : ""
-              }`}
-            >
-              <Trash2 className="h-4 w-4 mr-2" /> Delete Case
-            </button>
+            {caseDetail.status === "Posted" && (
+              <button
+                onClick={() => setIsDeleteModalOpen(true)}
+                className="px-4 py-2 bg-gradient-to-r from-red-500 to-red-600 text-white rounded-md hover:from-red-600 hover:to-red-700 transition-all duration-300 shadow-sm hover:shadow flex items-center"
+                disabled={deleteLoading}
+              >
+                {deleteLoading ? (
+                  <div className="flex items-center">
+                    <div className="animate-spin rounded-full h-4 w-4 border-t-2 border-b-2 border-white mr-2"></div>
+                    Processing...
+                  </div>
+                ) : (
+                  <>
+                    <Trash2 className="w-4 h-4 inline mr-1" /> Delete Case
+                  </>
+                )}
+              </button>
+            )}
           </div>
         </div>
-        {deleteError && (
-          <div className="mt-4 p-2 bg-red-100 text-red-600 rounded-lg">
-            {deleteError}
-          </div>
-        )}
-        {closeSuccess && (
-          <div className="mt-4 p-2 bg-green-100 text-green-600 rounded-lg">
-            {closeSuccess}
-          </div>
-        )}
-        {closeError && (
-          <div className="mt-4 p-2 bg-red-100 text-red-600 rounded-lg">
-            {closeError}
-          </div>
-        )}
       </div>
 
-      {/* Close Confirmation Modal */}
+      {/* Tabs Navigation */}
+      <div className="bg-white border border-gray-200 rounded-lg shadow-md mb-6 overflow-hidden">
+        <div className="flex border-b">
+          <button
+            className={`px-6 py-3.5 text-sm font-medium flex items-center ${
+              activeTab === "overview"
+                ? "border-b-2 border-blue-500 text-blue-600 bg-blue-50"
+                : "text-gray-500 hover:text-gray-700 hover:bg-gray-50"
+            } transition-colors duration-200`}
+            onClick={() => setActiveTab("overview")}
+          >
+            <FileText className="w-4 h-4 mr-2" />
+            Overview
+          </button>
+          <button
+            className={`px-6 py-3.5 text-sm font-medium flex items-center ${
+              activeTab === "documents"
+                ? "border-b-2 border-blue-500 text-blue-600 bg-blue-50"
+                : "text-gray-500 hover:text-gray-700 hover:bg-gray-50"
+            } transition-colors duration-200`}
+            onClick={() => setActiveTab("documents")}
+          >
+            <File className="w-4 h-4 mr-2" />
+            Documents
+          </button>
+          <button
+            className={`px-6 py-3.5 text-sm font-medium flex items-center ${
+              activeTab === "notes"
+                ? "border-b-2 border-blue-500 text-blue-600 bg-blue-50"
+                : "text-gray-500 hover:text-gray-700 hover:bg-gray-50"
+            } transition-colors duration-200`}
+            onClick={() => setActiveTab("notes")}
+          >
+            <MessageSquare className="w-4 h-4 mr-2" />
+            Notes
+          </button>
+          {caseDetail.status === "Assigned" && (
+            <button
+              className={`px-6 py-3.5 text-sm font-medium flex items-center ${
+                activeTab === "appointments"
+                  ? "border-b-2 border-blue-500 text-blue-600 bg-blue-50"
+                  : "text-gray-500 hover:text-gray-700 hover:bg-gray-50"
+              } transition-colors duration-200`}
+              onClick={() => setActiveTab("appointments")}
+            >
+              <Calendar className="w-4 h-4 mr-2" />
+              Appointments
+            </button>
+          )}
+        </div>
+
+        {/* Tab Content */}
+        <div className="p-6">
+          {activeTab === "overview" && (
+            <div>
+              {caseDetail.status === "Posted" && (
+                <div className="mb-6">
+                  <h3 className="text-lg font-semibold mb-4 flex items-center">
+                    <Award className="w-5 h-5 mr-2 text-blue-500" />
+                    Lawyer Bids
+                  </h3>
+                  {bids.length > 0 ? (
+                    <div className="space-y-4">
+                      {bids.map((bid) => (
+                        <div
+                          key={bid._id}
+                          className="bg-white border border-gray-200 rounded-lg p-5 hover:shadow-lg transition-all duration-300 hover:border-blue-200"
+                        >
+                          <div className="flex justify-between items-center mb-3">
+                            <div className="flex items-center">
+                              <img
+                                src={bid.lawyer?.profile_photo || defaultAvatar}
+                                alt={bid.lawyer?.username || "Lawyer"}
+                                className="w-12 h-12 rounded-full object-cover border-2 border-gray-100 mr-3"
+                              />
+                              <div>
+                                <div className="flex items-center">
+                                  <h4 className="font-semibold text-gray-800">
+                                    {bid.lawyer?.username || "Unknown Lawyer"}
+                                  </h4>
+                                  {bid.lawyer?._id && (
+                                    <Link 
+                                      to={`/client/lawyer/${bid.lawyer._id}`}
+                                      className="ml-2 p-1.5 bg-blue-50 text-blue-600 rounded-full hover:bg-blue-100 transition-colors"
+                                      title="View Lawyer Profile"
+                                    >
+                                      <ExternalLink className="w-4 h-4" />
+                                    </Link>
+                                  )}
+                                </div>
+                                <div className="flex items-center text-sm text-gray-500 mt-1">
+                                  <Clock className="w-3.5 h-3.5 mr-1" />
+                                  <span>{new Date(bid.createdAt).toLocaleDateString()}</span>
+                                </div>
+                              </div>
+                            </div>
+                            <div className="text-right">
+                              <span className="text-lg font-bold text-green-600 block">
+                                {formatCurrency(bid.amount)}
+                              </span>
+                              <span className="text-xs text-gray-500">Bid Amount</span>
+                            </div>
+                          </div>
+                          
+                          <div className="bg-gray-50 p-3 rounded-lg mb-4 text-gray-700">
+                            {bid.comment || "No additional message provided."}
+                          </div>
+                          
+                          <div className="flex justify-end">
+                            <button
+                              onClick={() => handleAcceptBid(bid._id)}
+                              className="px-4 py-2.5 bg-gradient-to-r from-green-500 to-green-600 text-white rounded-lg hover:from-green-600 hover:to-green-700 transition-all duration-300 shadow-sm hover:shadow flex items-center"
+                              disabled={acceptLoading === bid._id}
+                            >
+                              {acceptLoading === bid._id ? (
+                                <div className="flex items-center">
+                                  <div className="animate-spin rounded-full h-4 w-4 border-t-2 border-b-2 border-white mr-2"></div>
+                                  Processing...
+                                </div>
+                              ) : (
+                                <>
+                                  <ThumbsUp className="w-4 h-4 mr-2" />
+                                  Accept Bid
+                                </>
+                              )}
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="bg-gray-50 rounded-lg p-8 text-center">
+                      <User className="w-12 h-12 text-gray-400 mx-auto mb-3" />
+                      <p className="text-gray-600">No bids have been placed yet.</p>
+                      <p className="text-sm text-gray-500 mt-2">Check back later or update your case details to attract more lawyers.</p>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {caseDetail.status === "Assigned" && (
+                <div className="mb-6">
+                  <h3 className="text-lg font-semibold mb-4 flex items-center">
+                    <Shield className="w-5 h-5 mr-2 text-blue-500" />
+                    Assigned Lawyer
+                  </h3>
+                  <div className="bg-white border border-gray-200 rounded-lg p-5 hover:shadow-lg transition-all duration-300">
+                    {caseDetail.assigned_lawyer ? (
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center">
+                          <img
+                            src={caseDetail.assigned_lawyer.profile_photo || defaultAvatar}
+                            alt={caseDetail.assigned_lawyer.username}
+                            className="w-16 h-16 rounded-full object-cover border-2 border-gray-100 mr-4"
+                          />
+                          <div>
+                            <h4 className="font-semibold text-gray-800 text-lg">
+                              {caseDetail.assigned_lawyer.username}
+                            </h4>
+                            <div className="flex items-center mt-1">
+                              <DollarSign className="w-4 h-4 text-green-600 mr-1" />
+                              <span className="font-medium text-green-600">
+                                {caseDetail.winning_bid?.amount
+                                  ? formatCurrency(caseDetail.winning_bid.amount)
+                                  : "N/A"}
+                              </span>
+                              <span className="text-gray-500 text-sm ml-1">Accepted Bid</span>
+                            </div>
+                            <Link
+                              to={`/client/lawyer/${caseDetail.assigned_lawyer._id}`}
+                              className="inline-flex items-center mt-2 text-blue-600 hover:text-blue-800 text-sm font-medium"
+                            >
+                              <ExternalLink className="w-3.5 h-3.5 mr-1" />
+                              View Full Profile
+                            </Link>
+                          </div>
+                        </div>
+                        <Link
+                          to={`/client/messages/${caseDetail.assigned_lawyer._id}`}
+                          className="px-4 py-2 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition-colors flex items-center"
+                        >
+                          <MessageSquare className="w-4 h-4 mr-2" />
+                          Message
+                        </Link>
+                      </div>
+                    ) : (
+                      <div className="text-center py-6">
+                        <User className="w-12 h-12 text-gray-300 mx-auto mb-2" />
+                        <p className="text-gray-600">No lawyer assigned yet</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {activeTab === "documents" && (
+           
+              
+              <div className="p-4">
+                <DocumentsTab 
+                  caseDetail={caseDetail} 
+                  isDocsOpen={isDocsOpen} 
+                  toggleDocs={toggleDocs} 
+                  refreshCaseDetails={refreshCaseDetails}
+                  setActiveTab={setActiveTab}
+                />
+              </div>
+          )}
+
+          {activeTab === "notes" && (
+            <NotesTab
+              caseDetail={caseDetail}
+              formatDate={formatDate}
+              onAddNote={() => refreshCaseDetails()} // Just refresh case details when a note is added
+              addNoteLoading={addNoteLoading}
+              addNoteError={addNoteError}
+              addNoteSuccess={addNoteSuccess}
+              caseId={id}
+            />
+          )}
+
+          {activeTab === "appointments" && caseDetail.status === "Assigned" && (
+            <div className="bg-white rounded-xl shadow-md overflow-hidden mb-6">
+              <div className="p-4">
+                <SimpleErrorBoundary
+                  onReset={() => {
+                    // Reset the state that caused the error
+                    fetchAppointments();
+                  }}
+                >
+                  <AppointmentsTab 
+                    caseDetail={caseDetail}
+                    appointments={Array.isArray(appointments) ? appointments : []}
+                    appointmentsLoading={appointmentsLoading}
+                    appointmentsError={appointmentsError}
+                    formatDate={formatDate}
+                    onRescheduleAppointment={handleRescheduleAppointment}
+                    onConfirmAppointment={handleConfirmAppointment}
+                    onCancelAppointment={handleCancelAppointment}
+                    onCompleteAppointment={handleCompleteAppointment}
+                    downloadICSFile={downloadICSFile}
+                    showAppointmentActions={showAppointmentActions}
+                    setShowAppointmentActions={setShowAppointmentActions}
+                    appointmentActionsRef={appointmentActionsRef}
+                    selectedAppointment={selectedAppointment}
+                    setSelectedAppointment={setSelectedAppointment}
+                    isRescheduleModalOpen={isRescheduleModalOpen}
+                    setIsRescheduleModalOpen={setIsRescheduleModalOpen}
+                    refreshCaseDetails={refreshCaseDetails}
+                  />
+                </SimpleErrorBoundary>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Close Case Modal */}
       {isCloseModalOpen && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white rounded-lg p-6 w-full max-w-md shadow-lg transform transition-all duration-300 scale-100">
             <div className="flex justify-between items-center mb-4">
               <h2 className="text-xl font-semibold text-gray-800">
-                Confirm Close
+                Close Case
               </h2>
               <button
                 onClick={() => setIsCloseModalOpen(false)}
@@ -469,22 +1246,90 @@ export default function CaseDetails() {
                 <X className="h-6 w-6" />
               </button>
             </div>
-            <p className="text-gray-600 mb-6">
-              Are you sure you want to close this case? This action cannot be
-              undone.
+            
+            <p className="mb-4 text-gray-600">
+              Are you sure you want to close this case? This action cannot be undone.
             </p>
+            
+            {closeError && (
+              <div className="mb-4 p-2 bg-red-100 text-red-600 rounded-lg">
+                {closeError}
+              </div>
+            )}
+            
+            {/* Rating Section - Only show if there's an assigned lawyer */}
+            {caseDetail?.assigned_lawyer && (
+              <div className="mb-6 border-t border-gray-200 pt-4 mt-4">
+                <div className="flex items-center justify-between mb-2">
+                  <h3 className="font-medium text-gray-800">Rate your lawyer</h3>
+                  <label className="inline-flex items-center cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={showRatingInCloseModal}
+                      onChange={() => setShowRatingInCloseModal(!showRatingInCloseModal)}
+                      className="sr-only peer"
+                    />
+                    <div className="relative w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                    <span className="ml-2 text-sm font-medium text-gray-600">
+                      {showRatingInCloseModal ? "Enabled" : "Skip rating"}
+                    </span>
+                  </label>
+                </div>
+                
+                {showRatingInCloseModal && (
+                  <>
+                    {/* Star Rating */}
+                    <div className="flex justify-center space-x-1 mb-4">
+                      {[1, 2, 3, 4, 5].map((star) => (
+                        <button
+                          key={star}
+                          type="button"
+                          onClick={() => setRatingValue(star)}
+                          onMouseEnter={() => setRatingHover(star)}
+                          onMouseLeave={() => setRatingHover(0)}
+                          className="focus:outline-none"
+                        >
+                          <Star
+                            className={`h-8 w-8 ${
+                              star <= (ratingHover || ratingValue)
+                                ? "text-yellow-400 fill-yellow-400"
+                                : "text-gray-300"
+                            } transition-colors duration-150`}
+                          />
+                        </button>
+                      ))}
+                    </div>
+                    
+                    {/* Rating Description */}
+                    <div className="text-center mb-4">
+                      <p className="text-sm font-medium text-gray-700">
+                        {ratingValue === 1 && "Poor - Unsatisfactory experience"}
+                        {ratingValue === 2 && "Fair - Below average experience"}
+                        {ratingValue === 3 && "Good - Average experience"}
+                        {ratingValue === 4 && "Very Good - Above average experience"}
+                        {ratingValue === 5 && "Excellent - Outstanding experience"}
+                        {ratingValue === 0 && "Select a rating"}
+                      </p>
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
+            
             <div className="flex justify-end space-x-2">
               <button
                 onClick={() => setIsCloseModalOpen(false)}
-                className="px-4 py-2 bg-gradient-to-r from-gray-500 to-gray-600 text-white rounded-lg shadow-md hover:from-gray-600 hover:to-gray-700 hover:scale-105 transition-all duration-300"
+                className="px-4 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 transition-colors"
               >
                 Cancel
               </button>
               <button
                 onClick={handleCloseCase}
-                disabled={closeLoading}
-                className={`px-4 py-2 bg-gradient-to-r from-gray-700 to-gray-800 text-white rounded-lg shadow-md hover:from-gray-800 hover:to-gray-900 hover:scale-105 transition-all duration-300 flex items-center ${
-                  closeLoading ? "opacity-50 cursor-not-allowed" : ""
+                disabled={closeLoading || (showRatingInCloseModal && ratingValue === 0 && caseDetail?.assigned_lawyer)}
+                className={`px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors flex items-center ${
+                  (closeLoading || (showRatingInCloseModal && ratingValue === 0 && caseDetail?.assigned_lawyer)) 
+                    ? "opacity-50 cursor-not-allowed" 
+                    : ""
                 }`}
               >
                 {closeLoading ? (
@@ -493,7 +1338,7 @@ export default function CaseDetails() {
                     Closing...
                   </>
                 ) : (
-                  "Confirm Close"
+                  "Close Case"
                 )}
               </button>
             </div>
@@ -661,409 +1506,80 @@ export default function CaseDetails() {
           </div>
         </div>
       )}
-
-      {/* Assigned Lawyer */}
-      {caseItem.assigned_lawyer && (
-        <div className="bg-white border border-gray-300 rounded-lg shadow-md p-6 mb-6 hover:shadow-lg hover:scale-101 transition-all duration-300">
-          <div className="flex justify-between">
-            <div className="flex-1">
-              <h2 className="text-xl font-semibold mb-4 flex items-center text-gray-800">
-                <User className="mr-2 h-5 w-5 text-gray-700" /> Assigned Lawyer
-              </h2>
-              <p className="text-sm text-gray-600">
-                Username: {caseItem.assigned_lawyer.username}
-              </p>
-              <p className="text-sm text-gray-600">
-                Email: {caseItem.assigned_lawyer.email}
-              </p>
-            </div>
-            <div className="flex flex-col space-y-2">
-              <button
-                onClick={() => alert("Messaging functionality coming soon!")}
-                className="inline-flex items-center px-4 py-2 bg-gradient-to-r from-gray-700 to-gray-800 text-white rounded-lg shadow-md hover:from-gray-800 hover:to-gray-900 hover:scale-105 transition-all duration-300"
-              >
-                <MessageSquare className="mr-2 h-4 w-4" /> Message Lawyer
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Winning Bid */}
-      {caseItem.winning_bid && (
-        <div className="bg-white border border-gray-300 rounded-lg shadow-md p-6 mb-6 hover:shadow-lg hover:scale-101 transition-all duration-300">
-          <h2 className="text-xl font-semibold mb-4 text-gray-800">
-            Winning Bid
-          </h2>
-          <p className="text-sm text-gray-600">
-            Amount: {caseItem.winning_bid.amount} ETB
-          </p>
-          <p className="text-sm text-gray-600">
-            Lawyer: {caseItem.assigned_lawyer?.username || "Unknown"}
-          </p>
-        </div>
-      )}
-
-      {/* Documents */}
-      <div className="bg-white border border-gray-300 rounded-lg shadow-md p-6 mb-6 hover:shadow-lg hover:scale-101 transition-all duration-300">
-        <div className="flex justify-between">
-          <div className="flex-1">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-xl font-semibold flex items-center text-gray-800">
-                <File className="mr-2 h-5 w-5 text-gray-700" /> Documents
-              </h2>
-              <button
-                onClick={toggleDocs}
-                className="flex items-center text-gray-700 hover:text-gray-900 transition-all duration-300"
-              >
-                {isDocsOpen ? (
-                  <ChevronUp className="h-5 w-5" />
-                ) : (
-                  <ChevronDown className="h-5 w-5" />
-                )}
-              </button>
-            </div>
-            {isDocsOpen && (
-              <div>
-                <CaseDocument documents={caseItem.documents} caseId={id} />
-              </div>
-            )}
-          </div>
-          <div className="flex flex-col space-y-2">
-            <button
-              onClick={() =>
-                alert("Document upload functionality coming soon!")
-              }
-              className="inline-flex items-center px-4 py-2 bg-gradient-to-r from-gray-700 to-gray-800 text-white rounded-lg shadow-md hover:from-gray-800 hover:to-gray-900 hover:scale-105 transition-all duration-300"
-            >
-              <Plus className="h-4 w-4" />
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* Notes */}
-      <div className="bg-white border border-gray-300 rounded-lg shadow-md p-6 mb-6 hover:shadow-lg hover:scale-101 transition-all duration-300">
-        <div className="flex justify-between">
-          <div className="flex-1">
-            <h2 className="text-xl font-semibold flex items-center mb-4 text-gray-800">
-              <MessageSquare className="mr-2 h-5 w-5 text-gray-700" /> Notes
-            </h2>
-            {caseItem.notes && caseItem.notes.length > 0 ? (
-              <ul className="space-y-4">
-                {caseItem.notes.map((note) => (
-                  <li
-                    key={note._id}
-                    className="p-4 border border-gray-300 rounded-lg hover:border-gray-500 hover:bg-gray-50 transition-all duration-300"
-                  >
-                    <p className="text-sm text-gray-600">
-                      <span className="font-medium">Content:</span>{" "}
-                      {note.content}
-                    </p>
-                    <p className="text-sm text-gray-600">
-                      <span className="font-medium">Visibility:</span>{" "}
-                      {note.visibility}
-                    </p>
-                    <p className="text-sm text-gray-600">
-                      <span className="font-medium">Created By:</span>{" "}
-                      {note.createdBy?.username || "Unknown"}
-                    </p>
-                    <p className="text-sm text-gray-600">
-                      <span className="font-medium">Created At:</span>{" "}
-                      {new Date(note.createdAt).toLocaleDateString()}
-                    </p>
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <p className="text-gray-600">No notes available.</p>
-            )}
-          </div>
-          <div className="flex flex-col space-y-2">
-            <button
-              onClick={() => setIsAddNoteModalOpen(true)}
-              className="inline-flex items-center px-4 py-2 bg-gradient-to-r from-gray-700 to-gray-800 text-white rounded-lg shadow-md hover:from-gray-800 hover:to-gray-900 hover:scale-105 transition-all duration-300"
-            >
-              <Plus className="h-4 w-4" />
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* Add Note Modal */}
-      {isAddNoteModalOpen && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 w-full max-w-md shadow-lg transform transition-all duration-300 scale-100">
-            <div className="flex justify-between items-center mb-4">
-              <h2 className="text-xl font-semibold text-gray-800">Add Note</h2>
-              <button
-                onClick={() => {
-                  setIsAddNoteModalOpen(false);
-                  setNoteForm({ content: "", visibility: "Both" });
-                  setAddNoteError(null);
-                  setAddNoteSuccess(null);
-                }}
-                className="text-gray-500 hover:text-gray-700"
-              >
-                <X className="h-6 w-6" />
-              </button>
-            </div>
-            {addNoteSuccess && (
-              <div className="mb-4 p-2 bg-green-100 text-green-600 rounded-lg">
-                {addNoteSuccess}
-              </div>
-            )}
-            {addNoteError && (
-              <div className="mb-4 p-2 bg-red-100 text-red-600 rounded-lg">
-                {addNoteError}
-              </div>
-            )}
-            <form onSubmit={handleAddNote}>
-              <div className="mb-4">
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Note Content
-                </label>
-                <textarea
-                  value={noteForm.content}
-                  onChange={(e) =>
-                    setNoteForm({ ...noteForm, content: e.target.value })
-                  }
-                  className="w-full border border-gray-400 rounded-lg p-2 bg-gray-50 focus:outline-none focus:ring-2 focus:ring-gray-500 transition-all duration-300"
-                  rows="4"
-                  maxLength="500"
-                  required
-                  placeholder="Enter your note here..."
-                />
-              </div>
-              <div className="mb-4">
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Visibility
-                </label>
-                <select
-                  value={noteForm.visibility}
-                  onChange={(e) =>
-                    setNoteForm({ ...noteForm, visibility: e.target.value })
-                  }
-                  className="w-full border border-gray-400 rounded-lg p-2 bg-gray-50 focus:outline-none focus:ring-2 focus:ring-gray-500 transition-all duration-300"
-                >
-                  {["Both", "Client", "Lawyer"].map((vis) => (
-                    <option key={vis} value={vis}>
-                      {vis}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="flex justify-end space-x-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsAddNoteModalOpen(false);
-                    setNoteForm({ content: "", visibility: "Both" });
-                    setAddNoteError(null);
-                    setAddNoteSuccess(null);
-                  }}
-                  className="px-4 py-2 bg-gradient-to-r from-gray-500 to-gray-600 text-white rounded-lg shadow-md hover:from-gray-600 hover:to-gray-700 hover:scale-105 transition-all duration-300"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={addNoteLoading}
-                  className={`px-4 py-2 bg-gradient-to-r from-gray-700 to-gray-800 text-white rounded-lg shadow-md hover:from-gray-800 hover:to-gray-900 hover:scale-105 transition-all duration-300 flex items-center ${
-                    addNoteLoading ? "opacity-50 cursor-not-allowed" : ""
-                  }`}
-                >
-                  {addNoteLoading ? (
-                    <>
-                      <div className="animate-spin rounded-full h-5 w-5 border-t-2 border-b-2 border-white mr-2"></div>
-                      Adding...
-                    </>
-                  ) : (
-                    "Add Note"
-                  )}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* Form Templates */}
-      {caseItem.formTemplates && caseItem.formTemplates.length > 0 && (
-        <div className="bg-white border border-gray-300 rounded-lg shadow-md p-6 mb-6 hover:shadow-lg hover:scale-101 transition-all duration-300">
-          <div className="flex justify-between">
-            <div className="flex-1">
-              <h2 className="text-xl font-semibold mb-4 flex items-center text-gray-800">
-                <File className="mr-2 h-5 w-5 text-gray-700" /> Form Templates
-              </h2>
-              <ul className="space-y-4">
-                {caseItem.formTemplates.map((form) => (
-                  <li
-                    key={form._id}
-                    className="p-4 border border-gray-300 rounded-lg hover:border-gray-500 hover:bg-gray-50 transition-all duration-300"
-                  >
-                    <div className="flex justify-between items-center">
-                      <div>
-                        <p className="text-sm text-gray-600">
-                          <span className="font-medium">Title:</span>{" "}
-                          {form.title}
-                        </p>
-                        <p className="text-sm text-gray-600">
-                          <span className="font-medium">Created By:</span>{" "}
-                          {form.createdBy?.username || "Unknown"}
-                        </p>
-                      </div>
-                      <div className="flex flex-col space-y-2">
-                        <button
-                          onClick={() =>
-                            alert("Form viewing functionality coming soon!")
-                          }
-                          className="inline-flex items-center px-3 py-1 bg-gradient-to-r from-gray-700 to-gray-800 text-white rounded-lg shadow-md hover:from-gray-800 hover:to-gray-900 hover:scale-105 transition-all duration-300"
-                        >
-                          View Form
-                        </button>
-                      </div>
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Additional Deadlines */}
-      {caseItem.additionalDeadlines &&
-        caseItem.additionalDeadlines.length > 0 && (
-          <div className="bg-white border border-gray-300 rounded-lg shadow-md p-6 mb-6 hover:shadow-lg hover:scale-101 transition-all duration-300">
-            <h2 className="text-xl font-semibold mb-4 flex items-center text-gray-800">
-              <Calendar className="mr-2 h-5 w-5 text-gray-700" /> Additional
-              Deadlines
-            </h2>
-            <ul className="space-y-4">
-              {caseItem.additionalDeadlines.map((deadline) => {
-                const overdue = isOverdue(deadline.deadline);
-                return (
-                  <li
-                    key={deadline._id}
-                    className={`p-4 border rounded-lg transition-all duration-300 ${
-                      overdue
-                        ? "border-red-500 bg-red-50"
-                        : "border-gray-300 hover:border-gray-500 hover:bg-gray-50"
-                    }`}
-                  >
-                    <div className="flex justify-between items-center">
-                      <div>
-                        <p className="text-sm text-gray-600">
-                          <span className="font-medium">Description:</span>{" "}
-                          {deadline.description}
-                        </p>
-                        <p className="text-sm text-gray-600">
-                          <span className="font-medium">Deadline:</span>{" "}
-                          {new Date(deadline.deadline).toLocaleDateString()}
-                        </p>
-                        <p className="text-sm text-gray-600">
-                          <span className="font-medium">Assigned To:</span>{" "}
-                          {deadline.assignedTo?.username || "Unknown"}
-                        </p>
-                      </div>
-                      <span
-                        className={`px-3 py-1 text-sm text-white rounded-full ${
-                          overdue ? "bg-red-500" : "bg-green-500"
-                        }`}
-                      >
-                        {overdue ? "Overdue" : "Upcoming"}
-                      </span>
-                    </div>
-                  </li>
-                );
-              })}
-            </ul>
-          </div>
-        )}
-
-      {/* Bids Section */}
-      <div className="bg-white border border-gray-300 rounded-lg shadow-md p-6 mb-6 hover:shadow-lg hover:scale-101 transition-all duration-300">
-        <div className="flex justify-between">
-          <div className="flex-1">
-            <h2 className="text-xl font-semibold mb-4 text-gray-800">Bids</h2>
-            {acceptSuccess && (
-              <div className="mb-4 p-2 bg-green-100 text-green-600 rounded-lg">
-                {acceptSuccess}
-              </div>
-            )}
-            {acceptError && (
-              <div className="mb-4 p-2 bg-red-100 text-red-600 rounded-lg">
-                {acceptError}
-              </div>
-            )}
-            {bids.length > 0 ? (
-              <ul className="space-y-4">
-                {bids.map((bid) => (
-                  <li
-                    key={bid._id}
-                    className="relative p-4 border border-gray-300 rounded-lg shadow-sm hover:shadow-md hover:scale-101 transition-all duration-300"
-                  >
-                    <div className="pr-12">
-                      <p className="text-sm text-gray-700 font-semibold">
-                        <span className="font-medium">Lawyer:</span>{" "}
-                        {bid.lawyer?.username || "Unknown"}
-                      </p>
-                      <p className="text-sm text-gray-600">
-                        <span className="font-medium">Amount:</span>{" "}
-                        {bid.amount} ETB
-                      </p>
-                      {bid.comment && (
-                        <p className="text-sm text-gray-600">
-                          <span className="font-medium">Comment:</span>{" "}
-                          {bid.comment}
-                        </p>
-                      )}
-                    </div>
-                    {caseItem.status === "Posted" &&
-                      bid.status !== "Accepted" && (
-                        <div className="absolute right-[-12px] top-1/2 transform -translate-y-1/2 flex flex-col space-y-2">
-                          <button
-                            onClick={() => handleAcceptBid(bid._id)}
-                            disabled={acceptLoading === bid._id}
-                            className={`text-green-500 hover:text-green-600 hover:scale-110 transition-all duration-300 bg-white rounded-full shadow-md p-1 ${
-                              acceptLoading === bid._id
-                                ? "opacity-50 cursor-not-allowed"
-                                : ""
-                            }`}
-                          >
-                            {acceptLoading === bid._id ? (
-                              <div className="animate-spin rounded-full h-6 w-6 border-t-2 border-b-2 border-green-500"></div>
-                            ) : (
-                              <CheckCircle className="h-6 w-6" />
-                            )}
-                          </button>
-                        </div>
-                      )}
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <p className="text-gray-600">No bids available.</p>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {/* Appointments Section */}
-      {caseItem.status === "Assigned" && (
-        <AppointmentsPage caseItem={caseItem} fetchCaseDetails={fetchCaseDetails} />
-      )}
-
-      {/* Back Button */}
-      <div className="mt-6">
-        <Link
-          to="/client/cases"
-          className="inline-flex items-center px-4 py-2 bg-gradient-to-r from-gray-700 to-gray-800 text-white rounded-lg shadow-md hover:from-gray-800 hover:to-gray-900 hover:scale-105 transition-all duration-300"
-        >
-          Back to My Cases
-        </Link>
-      </div>
     </div>
   );
 }
+
+// Add this function to handle file upload
+const handleUploadDocuments = async (e) => {
+  e.preventDefault();
+  try {
+    setUploadLoading(true);
+    setUploadError(null);
+    setUploadSuccess(null);
+
+    if (!files.length) {
+      throw new Error("Please select at least one file to upload");
+    }
+
+    const token = localStorage.getItem("token");
+    if (!token) {
+      throw new Error("Authentication token not found. Please log in.");
+    }
+
+    const formData = new FormData();
+    
+    // Append each file to the FormData
+    for (let i = 0; i < files.length; i++) {
+      formData.append("case_files", files[i]);
+    }
+    
+    // Append other form data
+    formData.append("visibility", uploadForm.visibility);
+    formData.append("category", uploadForm.category);
+
+    const response = await fetch(`http://localhost:5000/api/cases/${id}/documents`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`
+      },
+      body: formData
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.message || "Failed to upload documents");
+    }
+
+    const data = await response.json();
+    setUploadSuccess(data.message || "Documents uploaded successfully");
+    
+    // Reset form
+    setFiles([]);
+    setUploadForm({
+      visibility: "Both",
+      category: "Evidence"
+    });
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
+    
+    // Refresh case details to show new documents
+    await refreshCaseDetails();
+    
+    // Close modal after a delay
+    setTimeout(() => {
+      setIsDocsOpen(false);
+      setUploadSuccess(null);
+    }, 2000);
+    
+  } catch (error) {
+    console.error("Error uploading documents:", error);
+    setUploadError(error.message);
+  } finally {
+    setUploadLoading(false);
+  }
+};
+
+// Define a default avatar data URI at the top of your component
+const defaultAvatar = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%23e2e8f0'%3E%3Cpath d='M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 3c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3zm0 14.2c-2.5 0-4.71-1.28-6-3.22.03-1.99 4-3.08 6-3.08 1.99 0 5.97 1.09 6 3.08-1.29 1.94-3.5 3.22-6 3.22z'/%3E%3C/svg%3E";
