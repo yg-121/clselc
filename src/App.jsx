@@ -23,7 +23,7 @@ import ClientLawyerProfile from "./pages/client/clientLawyer.jsx";
 import Notification from "./pages/client/Notifications.jsx";
 
 import AppointmentsPage from "./pages/common/Appointments.jsx";
-import Messages from "./pages/common/Messages.jsx";
+import MessagePage from "./pages/common/MessagePage.jsx";
 
 import LawyerHome from "./pages/lawyer/LawyerHome.jsx";
 import CaseOnHandDetails from "./pages/lawyer/CaseOnHandDetails.jsx";
@@ -191,7 +191,7 @@ function AppRoutes() {
             path="/client/messages"
             element={
               <ProtectedRoute allowedRoles={["Client"]}>
-                <Messages />
+                <MessagePage />
               </ProtectedRoute>
             }
           />
@@ -279,7 +279,7 @@ function AppRoutes() {
             path="/lawyer/messages"
             element={
               <ProtectedRoute allowedRoles={["Lawyer"]}>
-                <Messages />
+                <MessagePage />
               </ProtectedRoute>
             }
           />

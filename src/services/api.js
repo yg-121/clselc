@@ -65,7 +65,20 @@ const client = {
 const chat = {
   getChatHistory: (userId) => api.get(`/chats/history/${userId}`),
   sendMessage: (data) => api.post('/chats/send', data),
+  sendMessageWithFile: (data) =>
+    api.post('/chats/send', data, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    }),
   markChatAsRead: (chatId) => api.patch(`/chats/read/${chatId}`),
+  deleteChat: (chatId) => api.delete(`/chats/${chatId}`),
+  blockUser: (userId) => api.post(`/chats/block/${userId}`),
+  unblockUser: (userId) => api.post(`/chats/unblock/${userId}`),
+};
+
+// User endpoints
+const user = {
+  getBlockedStatus: (userId) => api.get(`/users/blocked/${userId}`),
+  getBlockedUsers: () => api.get('/users/blocked'),
 };
 
 // Combine into default export
@@ -74,7 +87,8 @@ export default {
   auth,
   client,
   chat,
+  user,
 };
 
 // Named exports for backward compatibility
-export { auth, client, chat };
+export { auth, client, chat, user };
