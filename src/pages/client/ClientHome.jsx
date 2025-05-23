@@ -684,7 +684,7 @@ export default function ClientHome() {
               </div>
               <div className="md:flex-shrink-0">
                 <Link
-                  to="/client/lawyers"
+                  to="/client/lawyer"
                   className="inline-block bg-background hover:bg-muted text-foreground font-bold py-3 px-8 rounded-md shadow-md transition duration-200 hover:underline"
                 >
                   Find a Lawyer Now

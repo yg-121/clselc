@@ -273,12 +273,10 @@ export default function MyBids() {
   return (
     <div className="font-inter bg-background text-foreground min-h-screen">
       {/* Header */}
-      <div className="bg-gradient-to-r from-primary to-primary/80 text-primary-foreground py-6">
+      <div className="bg-gradient-to-r from-primary to-primary/70 text-primary-foreground py-6">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <h1 className="text-2xl md:text-3xl font-bold">My Bids</h1>
-          <p className="text-primary-foreground/80 mt-1">
-            Track and manage all your bids on legal cases
-          </p>
+         
         </div>
       </div>
 
@@ -544,12 +542,7 @@ export default function MyBids() {
               >
                 Close
               </button>
-              <Link
-                to={`/lawyer/cases/${selectedBid.caseId}`}
-                className="inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-primary text-sm font-medium text-white hover:bg-primary/90 focus:outline-none"
-              >
-                View Case
-              </Link>
+              
             </div>
           </div>
         </div>

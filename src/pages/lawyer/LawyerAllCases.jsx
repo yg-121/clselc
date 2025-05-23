@@ -122,7 +122,7 @@ export default function LawyerAllCases() {
   return (
     <div className="font-inter bg-gray-50 min-h-screen">
       {/* Header */}
-      <div className="bg-gradient-to-r from-primary to-primary/80 text-primary-foreground py-6">
+      <div className="bg-gradient-to-r from-primary to-primary/70 text-primary-foreground py-6">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <h1 className="text-3xl font-bold">Posted Cases</h1>
         </div>

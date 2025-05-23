@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
-import { useParams, Link } from "react-router-dom";
-import { useAuth } from "../../hooks/authHooks";
+import { useParams, Link, useNavigate } from "react-router-dom";
+import { useAuth } from "../../hooks/authHooks.js";
 import {
   User,
   Mail,
@@ -23,36 +23,36 @@ import {
 const customStyles = {
   multiSelect: {
     option: {
-      padding: '8px 12px',
-      borderBottom: '1px solid #f0f0f0',
-      cursor: 'pointer',
-      transition: 'background-color 0.2s ease',
+      padding: "8px 12px",
+      borderBottom: "1px solid #f0f0f0",
+      cursor: "pointer",
+      transition: "background-color 0.2s ease",
     },
     optionSelected: {
-      backgroundColor: 'rgba(79, 70, 229, 0.1)',
-      color: '#4F46E5',
-      fontWeight: '500',
+      backgroundColor: "rgba(79, 70, 229, 0.1)",
+      color: "#4F46E5",
+      fontWeight: "500",
     },
     optionHover: {
-      backgroundColor: 'rgba(79, 70, 229, 0.05)',
+      backgroundColor: "rgba(79, 70, 229, 0.05)",
     },
     tag: {
-      display: 'inline-flex',
-      alignItems: 'center',
-      backgroundColor: 'rgba(79, 70, 229, 0.1)',
-      color: '#4F46E5',
-      fontSize: '0.75rem',
-      borderRadius: '9999px',
-      padding: '0.25rem 0.5rem',
-      margin: '0.25rem',
+      display: "inline-flex",
+      alignItems: "center",
+      backgroundColor: "rgba(79, 70, 229, 0.1)",
+      color: "#4F46E5",
+      fontSize: "0.75rem",
+      borderRadius: "9999px",
+      padding: "0.25rem 0.5rem",
+      margin: "0.25rem",
     },
     tagRemove: {
-      marginLeft: '0.25rem',
-      cursor: 'pointer',
-      color: '#4F46E5',
-      transition: 'opacity 0.2s ease',
-    }
-  }
+      marginLeft: "0.25rem",
+      cursor: "pointer",
+      color: "#4F46E5",
+      transition: "opacity 0.2s ease",
+    },
+  },
 };
 
 export default function LawyerProfile() {
@@ -61,6 +61,7 @@ export default function LawyerProfile() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const { lawyerId } = useParams();
+  const navigate = useNavigate();
   const [editMode, setEditMode] = useState(false);
   const [formData, setFormData] = useState({
     username: "",
@@ -74,12 +75,23 @@ export default function LawyerProfile() {
     languages: "",
     isAvailable: false,
     profilePhoto: null,
+    status: "", // Added to preserve status
+    verificationStatus: "", // Added to preserve verificationStatus
   });
   const [selectedSpecializations, setSelectedSpecializations] = useState([]);
   const validSpecializations = [
-    'Criminal Law', 'Family Law', 'Corporate Law', 'Immigration', 'Personal Injury',
-    'Real Estate', 'Civil law', 'Marriage law', 'Intellectual Property', 'Employment Law',
-    'Bankruptcy', 'Tax Law'
+    "Criminal Law",
+    "Family Law",
+    "Corporate Law",
+    "Immigration",
+    "Personal Injury",
+    "Real Estate",
+    "Civil law",
+    "Marriage law",
+    "Intellectual Property",
+    "Employment Law",
+    "Bankruptcy",
+    "Tax Law",
   ];
   const [successMessage, setSuccessMessage] = useState("");
   const [previewImage, setPreviewImage] = useState(null);
@@ -87,13 +99,15 @@ export default function LawyerProfile() {
   const [passwordForm, setPasswordForm] = useState({
     currentPassword: "",
     newPassword: "",
-    confirmPassword: ""
+    confirmPassword: "",
   });
   const [passwordError, setPasswordError] = useState("");
   const [passwordSuccess, setPasswordSuccess] = useState("");
   const [passwordLoading, setPasswordLoading] = useState(false);
+  const [imageError, setImageError] = useState(false);
+  const [pendingApproval, setPendingApproval] = useState(false);
 
-  // Add the handleSpecializationChange function
+  // Handle specialization change
   const handleSpecializationChange = (e) => {
     const options = e.target.options;
     const selected = [];
@@ -104,45 +118,49 @@ export default function LawyerProfile() {
     }
     setSelectedSpecializations(selected);
   };
-  
-  // Add a function to toggle individual specializations
+
+  // Toggle individual specializations
   const toggleSpecialization = (spec) => {
     if (selectedSpecializations.includes(spec)) {
-      setSelectedSpecializations(selectedSpecializations.filter(s => s !== spec));
+      setSelectedSpecializations(
+        selectedSpecializations.filter((s) => s !== spec)
+      );
     } else {
       setSelectedSpecializations([...selectedSpecializations, spec]);
     }
   };
 
+  // Fetch lawyer profile
   useEffect(() => {
     const fetchLawyerProfile = async () => {
       try {
         setLoading(true);
         const token = localStorage.getItem("token");
         if (!token) throw new Error("Authentication required");
-        
-        const response = await fetch(`http://localhost:5000/api/users/lawyers/${lawyerId || 'me'}`, {
-          headers: { Authorization: `Bearer ${token}` }
-        });
-        
+
+        const response = await fetch(
+          `http://localhost:5000/api/users/lawyers/${lawyerId || "me"}`,
+          {
+            headers: { Authorization: `Bearer ${token}` },
+          }
+        );
+
         if (!response.ok) {
           throw new Error("Failed to fetch lawyer profile");
         }
-        
+
         const data = await response.json();
-        // Merge the lawyer data with the email from auth context
         const mergedData = {
           ...data.lawyer,
-          email: authUser?.email || data.lawyer.email
+          email: authUser?.email || data.lawyer.email,
         };
-        
+
         setLawyerData(mergedData);
-        
-        // Set selected specializations
+
         if (Array.isArray(mergedData.specialization)) {
           setSelectedSpecializations(mergedData.specialization);
         }
-        
+
         setFormData({
           username: mergedData.username || "",
           email: mergedData.email || "",
@@ -161,6 +179,8 @@ export default function LawyerProfile() {
             : mergedData.languages || "",
           isAvailable: mergedData.isAvailable || false,
           profilePhoto: null,
+          status: mergedData.status || "Active", // Preserve status
+          verificationStatus: mergedData.verificationStatus || "Verified", // Preserve verificationStatus
         });
       } catch (err) {
         setError(err.message);
@@ -185,42 +205,45 @@ export default function LawyerProfile() {
     if (file) {
       setFormData((prev) => ({ ...prev, profilePhoto: file }));
       const reader = new FileReader();
-      reader.onloadend = () => setPreviewImage(reader.result);
+      reader.onloadend = () => {
+        setPreviewImage(reader.result);
+        setImageError(false);
+      };
       reader.readAsDataURL(file);
     }
+  };
+
+  const handleImageError = () => {
+    setImageError(true);
   };
 
   const handleUpdateProfile = async (e) => {
     e.preventDefault();
     setError(null);
     setSuccessMessage("");
+    setPendingApproval(false);
 
     try {
       const token = localStorage.getItem("token");
       if (!token) throw new Error("Authentication required");
 
       const data = new FormData();
-      
+
       // Add selected specializations
       if (selectedSpecializations.length > 0) {
-        selectedSpecializations.forEach(spec => {
+        selectedSpecializations.forEach((spec) => {
           data.append("specialization", spec);
         });
       }
-      
-      // Add other form fields
+
+      // Add all form fields, including status and verificationStatus
       Object.keys(formData).forEach((key) => {
         if (key === "profilePhoto" && formData.profilePhoto) {
           data.append(key, formData.profilePhoto);
-        } else if (key === "email") {
-          if (formData.email && formData.email !== (lawyerData.email || "")) {
-            data.append(key, formData.email);
-          }
         } else if (
-          key !== "specialization" && // Skip specialization as we handled it separately
+          key !== "specialization" && // Skip specialization as handled separately
           formData[key] !== null &&
-          formData[key] !== "" &&
-          formData[key].toString() !== (lawyerData[key] || "").toString()
+          formData[key] !== ""
         ) {
           data.append(key, formData[key]);
         }
@@ -235,13 +258,23 @@ export default function LawyerProfile() {
         return;
       }
 
-      const response = await fetch("http://localhost:5000/api/users/lawyer/profile", {
-        method: "PUT",
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-        body: data,
-      });
+      // Warn about email changes
+      if (formData.email !== (lawyerData.email || "")) {
+        setSuccessMessage(
+          "Email update requires admin verification. Your account may be pending approval."
+        );
+      }
+
+      const response = await fetch(
+        "http://localhost:5000/api/users/lawyer/profile",
+        {
+          method: "PUT",
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+          body: data,
+        }
+      );
 
       if (!response.ok) {
         const errorData = await response.json();
@@ -250,20 +283,53 @@ export default function LawyerProfile() {
 
       const responseData = await response.json();
       setLawyerData(responseData.lawyer);
-      setSuccessMessage("Profile updated successfully");
+
+      // Check if status or verificationStatus changed to Pending
+      if (
+        responseData.lawyer.status === "Pending" ||
+        responseData.lawyer.verificationStatus === "Pending"
+      ) {
+        setPendingApproval(true);
+        setSuccessMessage(
+          "Profile updated successfully. Your account is pending admin approval."
+        );
+        // Redirect to login after a delay
+        setTimeout(() => {
+          localStorage.removeItem("token");
+          navigate("/login");
+        }, 5000);
+      } else {
+        setSuccessMessage("Profile updated successfully");
+      }
+
       setEditMode(false);
-      setTimeout(() => setSuccessMessage(""), 3000);
+      setPreviewImage(null);
+      setImageError(false);
+      setTimeout(() => {
+        setSuccessMessage("");
+        setPendingApproval(false);
+      }, 5000);
     } catch (err) {
       setError(err.message);
+      if (
+        err.message.includes("Unauthorized") ||
+        err.message.includes("Authentication")
+      ) {
+        setPendingApproval(true);
+        setError("Your account status may be pending. Please log in again.");
+        setTimeout(() => {
+          localStorage.removeItem("token");
+          navigate("/login");
+        }, 3000);
+      }
     }
   };
 
   const toggleEditMode = () => {
     if (editMode) {
-      // Cancel edit mode
       setEditMode(false);
       setPreviewImage(null);
-      // Reset form data to current lawyer data
+      setImageError(false);
       setFormData({
         username: lawyerData.username || "",
         email: lawyerData.email || "",
@@ -282,18 +348,19 @@ export default function LawyerProfile() {
           : lawyerData.languages || "",
         isAvailable: lawyerData.isAvailable || false,
         profilePhoto: null,
+        status: lawyerData.status || "Active",
+        verificationStatus: lawyerData.verificationStatus || "Verified",
       });
     } else {
-      // Enter edit mode
       setEditMode(true);
     }
   };
 
   const handlePasswordChange = (e) => {
     const { name, value } = e.target;
-    setPasswordForm(prev => ({
+    setPasswordForm((prev) => ({
       ...prev,
-      [name]: value
+      [name]: value,
     }));
   };
 
@@ -301,53 +368,59 @@ export default function LawyerProfile() {
     e.preventDefault();
     setPasswordError("");
     setPasswordSuccess("");
-    
-    // Validate passwords
-    if (!passwordForm.currentPassword || !passwordForm.newPassword || !passwordForm.confirmPassword) {
+
+    if (
+      !passwordForm.currentPassword ||
+      !passwordForm.newPassword ||
+      !passwordForm.confirmPassword
+    ) {
       setPasswordError("All fields are required");
       return;
     }
-    
+
     if (passwordForm.newPassword !== passwordForm.confirmPassword) {
       setPasswordError("New passwords do not match");
       return;
     }
-    
+
     if (passwordForm.newPassword.length < 8) {
       setPasswordError("New password must be at least 8 characters");
       return;
     }
-    
+
     try {
       setPasswordLoading(true);
       const token = localStorage.getItem("token");
       if (!token) throw new Error("Authentication required");
-      
-      const response = await fetch("http://localhost:5000/api/users/lawyer/password", {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`
-        },
-        body: JSON.stringify({
-          currentPassword: passwordForm.currentPassword,
-          newPassword: passwordForm.newPassword
-        })
-      });
-      
+
+      const response = await fetch(
+        "http://localhost:5000/api/users/lawyer/password",
+        {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            currentPassword: passwordForm.currentPassword,
+            newPassword: passwordForm.newPassword,
+          }),
+        }
+      );
+
       const data = await response.json();
-      
+
       if (!response.ok) {
         throw new Error(data.message || "Failed to change password");
       }
-      
+
       setPasswordSuccess("Password changed successfully");
       setPasswordForm({
         currentPassword: "",
         newPassword: "",
-        confirmPassword: ""
+        confirmPassword: "",
       });
-      
+
       setTimeout(() => setPasswordSuccess(""), 3000);
     } catch (err) {
       setPasswordError(err.message);
@@ -369,7 +442,10 @@ export default function LawyerProfile() {
       <div className="text-center p-6 bg-red-50 rounded-lg">
         <XCircle className="h-12 w-12 text-red-500 mx-auto mb-4" />
         <p className="text-lg font-medium text-red-700">{error}</p>
-        <Link to="/lawyers" className="mt-4 inline-block text-primary hover:underline">
+        <Link
+          to="/lawyers"
+          className="mt-4 inline-block text-primary hover:underline"
+        >
           Back to Lawyers List
         </Link>
       </div>
@@ -378,11 +454,23 @@ export default function LawyerProfile() {
 
   return (
     <div className="max-w-6xl mx-auto px-4 py-6">
-      {/* Success message */}
-      {successMessage && (
-        <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-lg flex items-center">
-          <CheckCircle className="h-5 w-5 text-green-500 mr-2" />
-          <p className="text-green-700">{successMessage}</p>
+      {/* Success or pending approval message */}
+      {(successMessage || pendingApproval) && (
+        <div
+          className={`mb-4 p-3 border rounded-lg flex items-center ${
+            pendingApproval
+              ? "bg-yellow-50 border-yellow-200"
+              : "bg-green-50 border-green-200"
+          }`}
+        >
+          <CheckCircle
+            className={`h-5 w-5 mr-2 ${
+              pendingApproval ? "text-yellow-500" : "text-green-500"
+            }`}
+          />
+          <p className={pendingApproval ? "text-yellow-700" : "text-green-700"}>
+            {successMessage}
+          </p>
         </div>
       )}
 
@@ -423,7 +511,10 @@ export default function LawyerProfile() {
           <div className="md:w-1/3 bg-gray-50 p-6 flex flex-col items-center justify-center">
             <div className="relative">
               {editMode && (
-                <label htmlFor="profilePhoto" className="absolute bottom-0 right-0 bg-primary text-white rounded-full p-2 cursor-pointer shadow-lg">
+                <label
+                  htmlFor="profilePhoto"
+                  className="absolute bottom-0 right-0 bg-primary text-white rounded-full p-2 cursor-pointer shadow-lg"
+                >
                   <Edit3 className="h-4 w-4" />
                   <input
                     type="file"
@@ -438,15 +529,18 @@ export default function LawyerProfile() {
               <img
                 src={
                   previewImage ||
-                  (lawyerData.profile_photo
+                  (lawyerData.profile_photo && !imageError
                     ? `http://localhost:5000/Uploads/profiles/${lawyerData.profile_photo}`
-                    : "https://via.placeholder.com/150")
+                    : "https://placehold.co/150x150")
                 }
                 alt={lawyerData.username}
                 className="h-40 w-40 rounded-full object-cover border-4 border-white shadow-lg"
+                onError={handleImageError}
               />
             </div>
-            <h1 className="text-2xl font-bold mt-4 text-center">{lawyerData.username}</h1>
+            <h1 className="text-2xl font-bold mt-4 text-center">
+              {lawyerData.username}
+            </h1>
             <div className="flex items-center mt-2">
               <div className="flex">
                 {[1, 2, 3, 4, 5].map((star) => (
@@ -461,23 +555,31 @@ export default function LawyerProfile() {
                 ))}
               </div>
               <span className="ml-2 text-sm text-gray-600">
-                {lawyerData.averageRating ? lawyerData.averageRating.toFixed(1) : "0"} 
+                {lawyerData.averageRating
+                  ? lawyerData.averageRating.toFixed(1)
+                  : "0"}
                 ({lawyerData.ratingCount || 0})
               </span>
             </div>
             <div className="mt-4 flex flex-wrap justify-center gap-2">
-              {Array.isArray(lawyerData.specialization) && lawyerData.specialization.map((spec, index) => (
-                <span key={index} className="px-2 py-1 bg-primary/10 text-primary text-xs rounded-full">
-                  {spec}
-                </span>
-              ))}
+              {Array.isArray(lawyerData.specialization) &&
+                lawyerData.specialization.map((spec, index) => (
+                  <span
+                    key={index}
+                    className="px-2 py-1 bg-primary/10 text-primary text-xs rounded-full"
+                  >
+                    {spec}
+                  </span>
+                ))}
             </div>
             <div className="mt-4 flex items-center">
-              <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                lawyerData.isAvailable 
-                  ? "bg-green-100 text-green-800" 
-                  : "bg-red-100 text-red-800"
-              }`}>
+              <span
+                className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                  lawyerData.isAvailable
+                    ? "bg-green-100 text-green-800"
+                    : "bg-red-100 text-red-800"
+                }`}
+              >
                 {lawyerData.isAvailable ? "Available" : "Unavailable"}
               </span>
             </div>
@@ -536,25 +638,34 @@ export default function LawyerProfile() {
                 <div>
                   {!editMode ? (
                     <>
-                      <p className="text-gray-700 mb-4">{lawyerData.bio || "No bio information provided."}</p>
+                      <p className="text-gray-700 mb-4">
+                        {lawyerData.bio || "No bio information provided."}
+                      </p>
                       <div className="grid grid-cols-2 gap-4">
                         <div className="flex items-center">
                           <Briefcase className="h-4 w-4 text-primary mr-2" />
-                          <span className="text-sm">{lawyerData.yearsOfExperience || "0"} years experience</span>
+                          <span className="text-sm">
+                            {lawyerData.yearsOfExperience || "0"} years
+                            experience
+                          </span>
                         </div>
                         <div className="flex items-center">
                           <MapPin className="h-4 w-4 text-primary mr-2" />
-                          <span className="text-sm">{lawyerData.location || "Not specified"}</span>
+                          <span className="text-sm">
+                            {lawyerData.location || "Not specified"}
+                          </span>
                         </div>
                         <div className="flex items-center">
                           <DollarSign className="h-4 w-4 text-primary mr-2" />
-                          <span className="text-sm">${lawyerData.hourlyRate || "0"}/hour</span>
+                          <span className="text-sm">
+                            ${lawyerData.hourlyRate || "0"}/hour
+                          </span>
                         </div>
                         <div className="flex items-center">
                           <Globe className="h-4 w-4 text-primary mr-2" />
                           <span className="text-sm">
-                            {Array.isArray(lawyerData.languages) 
-                              ? lawyerData.languages.join(", ") 
+                            {Array.isArray(lawyerData.languages)
+                              ? lawyerData.languages.join(", ")
                               : lawyerData.languages || "Not specified"}
                           </span>
                         </div>
@@ -563,7 +674,9 @@ export default function LawyerProfile() {
                   ) : (
                     <form className="space-y-4">
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Bio</label>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Bio
+                        </label>
                         <textarea
                           name="bio"
                           value={formData.bio}
@@ -575,7 +688,9 @@ export default function LawyerProfile() {
                       </div>
                       <div className="grid grid-cols-2 gap-4">
                         <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">Experience (years)</label>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                            Experience (years)
+                          </label>
                           <input
                             type="number"
                             name="yearsOfExperience"
@@ -586,7 +701,9 @@ export default function LawyerProfile() {
                           />
                         </div>
                         <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">Location</label>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                            Location
+                          </label>
                           <input
                             type="text"
                             name="location"
@@ -596,7 +713,9 @@ export default function LawyerProfile() {
                           />
                         </div>
                         <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">Hourly Rate ($)</label>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                            Hourly Rate ($)
+                          </label>
                           <input
                             type="number"
                             name="hourlyRate"
@@ -607,7 +726,9 @@ export default function LawyerProfile() {
                           />
                         </div>
                         <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">Languages</label>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                            Languages
+                          </label>
                           <input
                             type="text"
                             name="languages"
@@ -634,32 +755,43 @@ export default function LawyerProfile() {
                           Specializations
                         </h3>
                         <div className="flex flex-wrap gap-2">
-                          {Array.isArray(lawyerData.specialization) && lawyerData.specialization.length > 0 ? (
+                          {Array.isArray(lawyerData.specialization) &&
+                          lawyerData.specialization.length > 0 ? (
                             lawyerData.specialization.map((spec, index) => (
-                              <span key={index} className="px-2 py-1 bg-primary/10 text-primary text-xs rounded-full">
+                              <span
+                                key={index}
+                                className="px-2 py-1 bg-primary/10 text-primary text-xs rounded-full"
+                              >
                                 {spec}
                               </span>
                             ))
                           ) : (
-                            <p className="text-gray-500 text-sm">No specializations listed</p>
+                            <p className="text-gray-500 text-sm">
+                              No specializations listed
+                            </p>
                           )}
                         </div>
                       </div>
-                      
                       <div>
                         <h3 className="text-sm font-medium text-gray-700 mb-2 flex items-center">
                           <FileText className="h-4 w-4 mr-2 text-primary" />
                           Certifications
                         </h3>
                         <div className="flex flex-wrap gap-2">
-                          {Array.isArray(lawyerData.certifications) && lawyerData.certifications.length > 0 ? (
+                          {Array.isArray(lawyerData.certifications) &&
+                          lawyerData.certifications.length > 0 ? (
                             lawyerData.certifications.map((cert, index) => (
-                              <span key={index} className="px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full">
+                              <span
+                                key={index}
+                                className="px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full"
+                              >
                                 {cert}
                               </span>
                             ))
                           ) : (
-                            <p className="text-gray-500 text-sm">No certifications listed</p>
+                            <p className="text-gray-500 text-sm">
+                              No certifications listed
+                            </p>
                           )}
                         </div>
                       </div>
@@ -667,7 +799,9 @@ export default function LawyerProfile() {
                   ) : (
                     <div className="space-y-4">
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">Specializations</label>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          Specializations
+                        </label>
                         <div className="grid grid-cols-2 gap-2 border border-gray-200 rounded-md p-3 bg-white">
                           {validSpecializations.map((spec) => (
                             <div key={spec} className="flex items-center">
@@ -677,37 +811,55 @@ export default function LawyerProfile() {
                                 checked={selectedSpecializations.includes(spec)}
                                 onChange={() => {
                                   if (selectedSpecializations.includes(spec)) {
-                                    setSelectedSpecializations(selectedSpecializations.filter(s => s !== spec));
+                                    setSelectedSpecializations(
+                                      selectedSpecializations.filter(
+                                        (s) => s !== spec
+                                      )
+                                    );
                                   } else {
-                                    setSelectedSpecializations([...selectedSpecializations, spec]);
+                                    setSelectedSpecializations([
+                                      ...selectedSpecializations,
+                                      spec,
+                                    ]);
                                   }
                                 }}
                                 className="h-4 w-4 text-primary focus:ring-primary border-gray-300 rounded"
                               />
-                              <label htmlFor={`spec-${spec}`} className="ml-2 text-sm text-gray-700">
+                              <label
+                                htmlFor={`spec-${spec}`}
+                                className="ml-2 text-sm text-gray-700"
+                              >
                                 {spec}
                               </label>
                             </div>
                           ))}
                         </div>
                         <div className="mt-3">
-                          <p className="text-sm font-medium text-gray-700 mb-2">Selected specializations:</p>
+                          <p className="text-sm font-medium text-gray-700 mb-2">
+                            Selected specializations:
+                          </p>
                           <div className="flex flex-wrap gap-2">
                             {selectedSpecializations.length > 0 ? (
                               selectedSpecializations.map((spec, index) => (
-                                <span key={index} className="px-2 py-1 bg-primary/10 text-primary text-xs rounded-full">
+                                <span
+                                  key={index}
+                                  className="px-2 py-1 bg-primary/10 text-primary text-xs rounded-full"
+                                >
                                   {spec}
                                 </span>
                               ))
                             ) : (
-                              <span className="text-gray-500 text-sm">No specializations selected</span>
+                              <span className="text-gray-500 text-sm">
+                                No specializations selected
+                              </span>
                             )}
                           </div>
                         </div>
                       </div>
-                      
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Certifications</label>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Certifications
+                        </label>
                         <input
                           type="text"
                           name="certifications"
@@ -717,7 +869,6 @@ export default function LawyerProfile() {
                           className="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary"
                         />
                       </div>
-                      
                       <div className="flex items-center">
                         <input
                           type="checkbox"
@@ -727,7 +878,10 @@ export default function LawyerProfile() {
                           onChange={handleInputChange}
                           className="h-4 w-4 text-primary focus:ring-primary border-gray-300 rounded"
                         />
-                        <label htmlFor="isAvailable" className="ml-2 text-sm text-gray-700">
+                        <label
+                          htmlFor="isAvailable"
+                          className="ml-2 text-sm text-gray-700"
+                        >
                           Available for new cases
                         </label>
                       </div>
@@ -744,12 +898,16 @@ export default function LawyerProfile() {
                       <div className="flex items-center">
                         <Mail className="h-4 w-4 text-primary mr-2" />
                         <span className="text-sm">
-                          {lawyerData.email || authUser?.email || "Email not provided"}
+                          {lawyerData.email ||
+                            authUser?.email ||
+                            "Email not provided"}
                         </span>
                       </div>
                       <div className="flex items-center">
                         <User className="h-4 w-4 text-primary mr-2" />
-                        <span className="text-sm">{lawyerData.username || "Username not provided"}</span>
+                        <span className="text-sm">
+                          {lawyerData.username || "Username not provided"}
+                        </span>
                       </div>
                       {lawyerData.phone && (
                         <div className="flex items-center">
@@ -761,7 +919,9 @@ export default function LawyerProfile() {
                   ) : (
                     <div className="space-y-4">
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Email
+                        </label>
                         <input
                           type="email"
                           name="email"
@@ -770,11 +930,14 @@ export default function LawyerProfile() {
                           className="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary"
                         />
                         <p className="mt-1 text-xs text-gray-500">
-                          Note: Changing your email will require admin verification
+                          Note: Changing your email will require admin
+                          verification
                         </p>
                       </div>
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Username</label>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Username
+                        </label>
                         <input
                           type="text"
                           name="username"
@@ -791,25 +954,27 @@ export default function LawyerProfile() {
               {/* Security tab */}
               {activeTab === "security" && (
                 <div>
-                  <h3 className="text-lg font-medium text-gray-900 mb-4">Change Password</h3>
-                  
+                  <h3 className="text-lg font-medium text-gray-900 mb-4">
+                    Change Password
+                  </h3>
                   {passwordSuccess && (
                     <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-lg flex items-center">
                       <CheckCircle className="h-5 w-5 text-green-500 mr-2" />
                       <p className="text-green-700">{passwordSuccess}</p>
                     </div>
                   )}
-                  
                   {passwordError && (
                     <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg flex items-center">
                       <XCircle className="h-5 w-5 text-red-500 mr-2" />
                       <p className="text-red-700">{passwordError}</p>
                     </div>
                   )}
-                  
                   <form onSubmit={handleChangePassword} className="space-y-4">
                     <div>
-                      <label htmlFor="currentPassword" className="block text-sm font-medium text-gray-700 mb-1">
+                      <label
+                        htmlFor="currentPassword"
+                        className="block text-sm font-medium text-gray-700 mb-1"
+                      >
                         Current Password
                       </label>
                       <input
@@ -822,9 +987,11 @@ export default function LawyerProfile() {
                         required
                       />
                     </div>
-                    
                     <div>
-                      <label htmlFor="newPassword" className="block text-sm font-medium text-gray-700 mb-1">
+                      <label
+                        htmlFor="newPassword"
+                        className="block text-sm font-medium text-gray-700 mb-1"
+                      >
                         New Password
                       </label>
                       <input
@@ -841,9 +1008,11 @@ export default function LawyerProfile() {
                         Password must be at least 8 characters long
                       </p>
                     </div>
-                    
                     <div>
-                      <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700 mb-1">
+                      <label
+                        htmlFor="confirmPassword"
+                        className="block text-sm font-medium text-gray-700 mb-1"
+                      >
                         Confirm New Password
                       </label>
                       <input
@@ -856,7 +1025,6 @@ export default function LawyerProfile() {
                         required
                       />
                     </div>
-                    
                     <div>
                       <button
                         type="submit"

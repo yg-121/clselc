@@ -12,7 +12,8 @@ import {
   Award,
   TrendingUp,
 } from "lucide-react";
-import LawyerAllCases from "./LawyerAllCases";
+import { jwtDecode } from "jwt-decode";
+import LawyerAllCases from "./LawyerAllCases.jsx";
 
 export default function LawyerHome({ userName }) {
   const [stats, setStats] = useState({
@@ -20,27 +21,73 @@ export default function LawyerHome({ userName }) {
     upcomingAppointments: 0,
     unreadMessages: 0,
     pendingBids: 0,
+    casesOnHand: 0,
     totalEarnings: 0,
     clientsHelped: 0,
   });
   const [availableCases, setAvailableCases] = useState([]);
+  const [inProgressCases, setInProgressCases] = useState([]);
   const [upcomingAppointments, setUpcomingAppointments] = useState([]);
   const [legalUpdates, setLegalUpdates] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [userId, setUserId] = useState(null);
 
+  // Helper function to map backend status to frontend status (from LawyerCase.jsx)
+  const mapStatus = (backendStatus) => {
+    switch (backendStatus?.toLowerCase()) {
+      case "posted":
+        return "started";
+      case "assigned":
+        return "on progress";
+      case "closed":
+        return "completed";
+      default:
+        return "started"; // Default to "started" for unknown statuses
+    }
+  };
+
+  // Decode token to get userId
   useEffect(() => {
+    const token = localStorage.getItem("token");
+    if (!token) {
+      setError("Authentication token not found. Please log in.");
+      setLoading(false);
+      window.location.href = "/login";
+      return;
+    }
+
+    try {
+      const decoded = jwtDecode(token);
+      if (!decoded.id) {
+        throw new Error("User ID not found in token.");
+      }
+      console.log("Decoded userId:", decoded.id); // Debug: Log userId
+      setUserId(decoded.id);
+    } catch (err) {
+      console.error("Error decoding token:", err);
+      setError("Failed to authenticate. Please log in again.");
+      setLoading(false);
+      localStorage.removeItem("token");
+      window.location.href = "/login";
+    }
+  }, []);
+
+  // Fetch data when userId is set
+  useEffect(() => {
+    if (!userId) return;
+
     const fetchData = async () => {
       try {
         setLoading(true);
         setError(null);
 
-        // Fetch available cases
         const token = localStorage.getItem("token");
         if (!token) {
           throw new Error("Authentication token not found. Please log in.");
         }
 
+        // Fetch cases
         const casesResponse = await fetch("http://localhost:5000/api/cases", {
           headers: {
             Authorization: `Bearer ${token}`,
@@ -56,10 +103,23 @@ export default function LawyerHome({ userName }) {
         }
 
         const casesData = await casesResponse.json();
-        console.log("Fetched cases:", casesData.cases);
+        console.log("Fetched cases:", casesData.cases); // Debug: Log all cases
+        console.log(
+          "Cases with assigned_lawyer._id:",
+          casesData.cases.map((c) => ({
+            id: c._id,
+            assigned_lawyer: c.assigned_lawyer?._id,
+            status: c.status,
+          }))
+        ); // Debug: Log assigned_lawyer and status
 
-        // Filter for posted cases and map to the required format
-        const mappedCases = casesData.cases
+        // Validate cases data
+        if (!Array.isArray(casesData.cases)) {
+          throw new Error("Invalid response: cases is not an array.");
+        }
+
+        // Filter and map available cases (posted)
+        const mappedAvailableCases = casesData.cases
           .filter((caseItem) => caseItem.status?.toLowerCase() === "posted")
           .map((caseItem) => ({
             id: caseItem._id || "unknown-id",
@@ -70,41 +130,114 @@ export default function LawyerHome({ userName }) {
             category: caseItem.category || "Other",
             description: caseItem.description || "No description available.",
           }))
-          .sort((a, b) => new Date(b.lastUpdated) - new Date(a.lastUpdated)); // Sort by lastUpdated (newest first)
+          .sort((a, b) => new Date(b.lastUpdated) - new Date(a.lastUpdated));
 
-        setAvailableCases(mappedCases);
+        setAvailableCases(mappedAvailableCases);
 
-        // Mock data for other sections (unchanged)
+        // Filter and map in-progress cases (assigned to this lawyer)
+        const mappedInProgressCases = casesData.cases
+          .filter(
+            (caseItem) =>
+              caseItem.assigned_lawyer?._id === userId &&
+              mapStatus(caseItem.status) === "on progress"
+          )
+          .map((caseItem) => ({
+            id: caseItem._id || "unknown-id",
+            category: caseItem.category || "Other",
+            client: caseItem.client?.username || "Unknown Client",
+            description:
+              caseItem.notes && caseItem.notes.length > 0
+                ? caseItem.notes[0].content
+                : caseItem.description || "No description available.",
+            deadline: caseItem.deadline || "No deadline",
+          }))
+          .sort((a, b) => new Date(b.deadline) - new Date(a.deadline));
+
+        console.log("Mapped in-progress cases:", mappedInProgressCases); // Debug: Log filtered cases
+        setInProgressCases(mappedInProgressCases);
+
+        // Fetch appointments
+        const appointmentsResponse = await fetch(
+          "http://localhost:5000/api/appointments",
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          }
+        );
+
+        if (!appointmentsResponse.ok) {
+          const errorData = await appointmentsResponse.json();
+          if (
+            appointmentsResponse.status === 401 ||
+            appointmentsResponse.status === 403
+          ) {
+            throw new Error("Session expired. Please log in again.");
+          }
+          throw new Error(errorData.message || "Failed to fetch appointments.");
+        }
+
+        const appointmentsData = await appointmentsResponse.json();
+        console.log("Fetched appointments:", appointmentsData.appointments);
+
+        // Map and filter appointments
+        const mappedAppointments = appointmentsData.appointments
+          .filter((appointment) =>
+            ["Pending", "Confirmed"].includes(appointment.status)
+          )
+          .map((appointment) => ({
+            id: appointment._id || "unknown-id",
+            client: appointment.client?.username || "Unknown Client",
+            date: appointment.date || new Date().toISOString(),
+            status: appointment.status || "Pending",
+          }))
+          .sort((a, b) => new Date(a.date) - new Date(b.date));
+
+        setUpcomingAppointments(mappedAppointments);
+
+        // Fetch bids
+        let pendingBidsCount = 2; // Fallback mock value
+        try {
+          const bidsResponse = await fetch(
+            "http://localhost:5000/api/bids/my-bids",
+            {
+              headers: {
+                Authorization: `Bearer ${token}`,
+              },
+            }
+          );
+
+          if (!bidsResponse.ok) {
+            const errorData = await bidsResponse.json();
+            console.error("Failed to fetch bids:", errorData.message);
+          } else {
+            const bidsData = await bidsResponse.json();
+            console.log("Fetched bids:", bidsData.bids);
+
+            if (!Array.isArray(bidsData.bids)) {
+              console.error("Invalid bids response: not an array");
+            } else {
+              pendingBidsCount = bidsData.bids.filter(
+                (bid) => bid.status?.toLowerCase() === "pending"
+              ).length;
+            }
+          }
+        } catch (err) {
+          console.error("Error fetching bids:", err.message);
+        }
+
+        // Update stats
         setStats({
-          activeCases: 5,
-          upcomingAppointments: 3,
-          unreadMessages: 7,
-          pendingBids: 2,
-          totalEarnings: 45000,
-          clientsHelped: 24,
+          activeCases: mappedAvailableCases.length,
+          upcomingAppointments: mappedAppointments.length,
+          unreadMessages: 7, // Mock data
+          pendingBids: pendingBidsCount,
+          casesOnHand: mappedInProgressCases.length,
+          totalEarnings: 45000, // Mock data
+          clientsHelped: 24, // Mock data
         });
 
-        const mockAppointments = [
-          {
-            id: 1,
-            client: "Abebe Bekele",
-            date: "2025-03-20T10:00:00",
-            status: "confirmed",
-          },
-          {
-            id: 2,
-            client: "Tigist Mengistu",
-            date: "2025-03-22T14:30:00",
-            status: "confirmed",
-          },
-          {
-            id: 3,
-            client: "Dawit Haile",
-            date: "2025-03-25T11:00:00",
-            status: "pending",
-          },
-        ];
-
+        // Mock legal updates
         const mockLegalUpdates = [
           {
             id: 1,
@@ -142,7 +275,6 @@ export default function LawyerHome({ userName }) {
           },
         ];
 
-        setUpcomingAppointments(mockAppointments);
         setLegalUpdates(mockLegalUpdates);
       } catch (err) {
         console.error("Error fetching data:", err);
@@ -157,17 +289,15 @@ export default function LawyerHome({ userName }) {
     };
 
     fetchData();
-  }, []);
+  }, [userId]);
 
   const formatDate = (dateString) => {
+    if (!dateString || dateString === "No deadline") return "No deadline";
     const date = new Date(dateString);
     return new Intl.DateTimeFormat("en-US", {
-      weekday: "short",
       month: "short",
       day: "numeric",
-      hour: "numeric",
-      minute: "numeric",
-      hour12: true,
+      year: "numeric",
     }).format(date);
   };
 
@@ -223,7 +353,6 @@ export default function LawyerHome({ userName }) {
               >
                 Here are cases on your hand
               </Link>
-              
             </div>
           </div>
         </div>
@@ -279,18 +408,31 @@ export default function LawyerHome({ userName }) {
               </h3>
             </div>
           </div>
+
+          <div className="bg-card text-card-foreground rounded-lg shadow-md p-6 hover:shadow-lg hover:scale-101 hover:bg-gradient-to-r hover:from-primary/5 hover:to-primary/10 transition-all duration-300">
+            <div className="flex flex-col items-center">
+              <div className="rounded-full bg-indigo-100 p-3 mb-4">
+                <Briefcase className="h-6 w-6 text-indigo-600" />
+              </div>
+              <p className="text-sm text-gray-500">Cases On Progress</p>
+              <h3 className="text-xl font-semibold text-foreground">
+                {stats.casesOnHand}
+              </h3>
+            </div>
+          </div>
         </div>
       </div>
 
       {/* Main Content */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          {/* Available Cases */}
+          {/* Available Cases and Cases On Hand */}
           <div className="lg:col-span-2">
-            <div className="bg-card text-card-foreground rounded-lg shadow-md overflow-hidden hover:shadow-lg transition-all duration-300">
+            {/* New Cases */}
+            <div className="rotating-border bg-background hover:bg-blue-100 transition duration-300 ease-in-out ">
               <div className="px-6 py-5 border-b border-gray-200 flex justify-between items-center">
                 <h2 className="text-lg font-semibold text-foreground">
-                  Available Cases
+                  New Cases
                 </h2>
                 <Link
                   to="/lawyer/all-cases"
@@ -301,32 +443,31 @@ export default function LawyerHome({ userName }) {
               </div>
 
               {availableCases.length > 0 ? (
-                <div className="divide-y divide-gray-200">
-                  {availableCases.map((caseItem) => (
-                    <div key={caseItem.id} className="p-6 hover:bg-gray-50">
-                      <div className="flex flex-col md:flex-row md:items-start md:justify-between">
-                        <div className="flex-1">
-                          <div className="flex items-start">
-                            <span className="ml-2 px-2 py-1 text-xs font-medium rounded-full bg-blue-100 text-blue-800">
-                              {caseItem.category}
-                            </span>
-                          </div>
-
-                          <div className="mt-1 flex items-center text-sm text-gray-500">
-                            <Users className="flex-shrink-0 mr-1.5 h-4 w-4 text-gray-400" />
-                            Client: {caseItem.client}
-                          </div>
-
-                          <p className="mt-2 text-sm text-gray-600 line-clamp-2">
-                            {caseItem.description}
-                          </p>
-
-                          <div className="mt-2 text-xs text-gray-500">
-                            Posted: {formatSimpleDate(caseItem.lastUpdated)}
-                          </div>
+                <div className="p-6 grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {availableCases.slice(0, 4).map((caseItem) => (
+                    <Link
+                      key={caseItem.id}
+                      to="/lawyer/all-cases"
+                      className="block"
+                    >
+                      <div className="bg-white rounded-lg shadow-sm p-4 hover:shadow-md hover:bg-gradient-to-r hover:from-primary/5 hover:to-primary/10 transition-all duration-200">
+                        <div className="flex items-start mb-2">
+                          <span className="px-2 py-1 text-xs font-medium rounded-full bg-blue-100 text-blue-800">
+                            {caseItem.category}
+                          </span>
+                        </div>
+                        <div className="flex items-center text-sm text-gray-500 mb-2">
+                          <Users className="flex-shrink-0 mr-1.5 h-4 w-4 text-gray-400" />
+                          {caseItem.client}
+                        </div>
+                        <p className="text-sm text-gray-600 line-clamp-2 mb-2">
+                          {caseItem.description}
+                        </p>
+                        <div className="text-xs text-gray-500">
+                          Posted: {formatSimpleDate(caseItem.lastUpdated)}
                         </div>
                       </div>
-                    </div>
+                    </Link>
                   ))}
                 </div>
               ) : (
@@ -335,22 +476,71 @@ export default function LawyerHome({ userName }) {
                 </div>
               )}
             </div>
-          </div>
 
-          {/* Sidebar */}
-          <div className="space-y-8">
-            {/* Upcoming Appointments */}
-            <div className="bg-card text-card-foreground rounded-lg shadow-md overflow-hidden hover:shadow-lg transition-all duration-300">
+            {/* Cases On Progress */}
+            <div className="rotating-border bg-muted hover:bg-purple-100 transition duration-300 ease-in-out">
               <div className="px-6 py-5 border-b border-gray-200 flex justify-between items-center">
                 <h2 className="text-lg font-semibold text-foreground">
-                  Upcoming Appointments
+                  Cases On Progress
                 </h2>
                 <Link
-                  to="/lawyer/appointments"
+                  to="/lawyer/lawyerCase"
                   className="text-blue-500 hover:text-blue-700 text-sm font-medium flex items-center"
                 >
                   View All <ArrowRight className="ml-1 h-4 w-4" />
                 </Link>
+              </div>
+
+              {inProgressCases.length > 0 ? (
+                <div className="p-6 grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {inProgressCases.slice(0, 4).map((caseItem) => (
+                    <Link
+                      key={caseItem.id}
+                      to={`/lawyer/lawyerCase/${caseItem.id}`}
+                      className="block"
+                    >
+                      <div className="bg-gray-50 rounded-lg shadow-sm p-6 relative hover:shadow-md hover:bg-gradient-to-r hover:from-primary/5 hover:to-primary/10 transition-all duration-200">
+                        <span className="absolute top-2 right-2 px-2 py-1 text-xs font-medium rounded-full bg-primary text-primary-foreground">
+                          On Progress
+                        </span>
+                        <div className="flex items-start mb-2">
+                          {/* <span className="px-2 py-1 text-xs font-medium rounded-full bg-primary text-primary-foreground"> */}
+                          <p>
+                            {" "}
+                            <strong>{caseItem.category}</strong>
+                          </p>
+                          {/* </span> */}
+                        </div>
+                        <div className="flex items-center text-sm text-gray-500 mb-2">
+                          <Users className="flex-shrink-0 mr-1.5 h-4 w-4 text-gray-400" />
+                          {caseItem.client}
+                        </div>
+                        <p className="text-sm text-gray-600 line-clamp-2 mb-2">
+                          {caseItem.description}
+                        </p>
+                        <div className="text-xs text-gray-500">
+                          Deadline: {formatDate(caseItem.deadline)}
+                        </div>
+                      </div>
+                    </Link>
+                  ))}
+                </div>
+              ) : (
+                <div className="p-6 text-center text-gray-500">
+                  <p>No cases on hand at the moment.</p>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Sidebar */}
+          <div className="space-y-8 ">
+            {/* Upcoming Appointments */}
+            <div className="rotating-border bg-background hover:bg-yellow-100 transition duration-300 ease-in-out">
+              <div className="px-6 py-5 border-b border-gray-200 flex justify-between items-center">
+                <h2 className="text-lg font-semibold text-foreground">
+                  Upcoming Appointments
+                </h2>
               </div>
 
               <div className="divide-y divide-gray-200">
@@ -369,7 +559,7 @@ export default function LawyerHome({ userName }) {
                         </div>
                         <span
                           className={`px-2 py-1 text-xs font-medium rounded-full ${
-                            appointment.status === "confirmed"
+                            appointment.status === "Confirmed"
                               ? "bg-green-100 text-green-800"
                               : "bg-yellow-100 text-yellow-800"
                           }`}
@@ -386,20 +576,10 @@ export default function LawyerHome({ userName }) {
                   </div>
                 )}
               </div>
-
-              <div className="bg-gray-50 px-6 py-4">
-                <Link
-                  to="/lawyer/appointments/availability"
-                  className="w-full inline-flex justify-center items-center px-4 py-2 border border-transparent rounded-lg text-sm font-medium text-primary-foreground bg-primary hover:bg-primary/90"
-                >
-                  <Calendar className="mr-2 h-4 w-4" />
-                  Set Availability
-                </Link>
-              </div>
             </div>
 
             {/* Professional Development */}
-            <div className="bg-card text-card-foreground rounded-lg shadow-md overflow-hidden hover:shadow-lg transition-all duration-300">
+            <div className="rotating-border bg-muted hover:bg-orange-100 transition duration-300 ease-in-out py-6">
               <div className="px-6 py-5 border-b border-gray-200">
                 <h2 className="text-lg font-semibold text-foreground">
                   Professional Development
@@ -445,7 +625,7 @@ export default function LawyerHome({ userName }) {
             </div>
 
             {/* Quick Actions */}
-            <div className="bg-card text-card-foreground rounded-lg shadow-md overflow-hidden hover:shadow-lg transition-all duration-300">
+            <div className="rotating-border bg-background hover:bg-blue-100 transition duration-300 ease-in-out">
               <div className="px-6 py-5 border-b border-gray-200">
                 <h2 className="text-lg font-semibold text-foreground">
                   Quick Actions
