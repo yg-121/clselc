@@ -159,27 +159,40 @@ export default function LawyerCase({ userName }) {
   };
 
   useEffect(() => {
-    // Filter cases based on selected status and search term
+    // Filter and sort cases based on selected status and search term
     let filtered = cases;
-    
+
     // Filter by status
     if (selectedStatus !== "all") {
       filtered = filtered.filter(
         (caseItem) => mapStatus(caseItem.status) === selectedStatus
       );
     }
-    
+
     // Filter by search term
     if (searchTerm.trim() !== "") {
       const term = searchTerm.toLowerCase();
       filtered = filtered.filter(
-        (caseItem) => 
-          caseItem.category?.toLowerCase().includes(term) || 
+        (caseItem) =>
+          caseItem.category?.toLowerCase().includes(term) ||
           caseItem.description?.toLowerCase().includes(term) ||
           caseItem.client?.username?.toLowerCase().includes(term)
       );
     }
-    
+
+    // Sort cases: On Progress > Started > Completed
+    const statusPriority = {
+      "on progress": 1,
+      started: 2,
+      completed: 3,
+    };
+
+    filtered = filtered.sort((a, b) => {
+      const statusA = mapStatus(a.status);
+      const statusB = mapStatus(b.status);
+      return statusPriority[statusA] - statusPriority[statusB];
+    });
+
     setFilteredCase(filtered);
   }, [selectedStatus, cases, searchTerm]);
 
@@ -198,7 +211,7 @@ export default function LawyerCase({ userName }) {
   return (
     <div className="font-inter bg-background text-foreground min-h-screen">
       {/* Header */}
-      <div className="bg-gradient-to-r from-primary to-primary/80 text-primary-foreground py-6">
+      <div className="bg-gradient-to-r from-primary to-primary/70 text-primary-foreground py-6">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <h1 className="text-2xl md:text-3xl font-bold">Cases On My Hand</h1>
         </div>

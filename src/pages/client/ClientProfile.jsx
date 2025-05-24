@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { useAuth } from "../../hooks/authHooks";
+import { useAuth } from "../../hooks/authHooks.js";
 import {
   User,
   Mail,

@@ -10,7 +10,7 @@ import {
   ChevronDown,
   ChevronUp,
 } from "lucide-react";
-import PostCaseDocument from "./PostedCaseDocument";
+import PostCaseDocument from "./PostedCaseDocument.jsx";
 
 // Helper function to map status to color
 const getStatusColor = (status) => {
