@@ -192,6 +192,13 @@ export default function LawyerProfile() {
     fetchLawyerProfile();
   }, [lawyerId, authUser]);
 
+  useEffect(() => {
+    if (lawyerData && lawyerData.profile_photo) {
+      console.log("Profile photo from API:", lawyerData.profile_photo);
+      console.log("Constructed URL:", `http://localhost:5000/uploads/${lawyerData.profile_photo}`);
+    }
+  }, [lawyerData]);
+
   const handleInputChange = (e) => {
     const { name, value, type, checked } = e.target;
     setFormData((prev) => ({
@@ -243,7 +250,7 @@ export default function LawyerProfile() {
       // Add all form fields, including status and verificationStatus
       Object.keys(formData).forEach((key) => {
         if (key === "profilePhoto" && formData.profilePhoto) {
-          data.append(key, formData.profilePhoto);
+          data.append("profile_photo", formData.profilePhoto);
         } else if (
           key !== "specialization" && // Skip specialization as handled separately
           formData[key] !== null &&
@@ -280,39 +287,46 @@ export default function LawyerProfile() {
         }
       );
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || "Failed to update profile");
-      }
+      // Check if response is JSON before parsing
+      const contentType = response.headers.get("content-type");
+      if (contentType && contentType.indexOf("application/json") !== -1) {
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.message || "Failed to update profile");
+        }
+        const responseData = await response.json();
+        setLawyerData(responseData.lawyer);
+        // Check if status or verificationStatus changed to Pending
+        if (
+          responseData.lawyer.status === "Pending" ||
+          responseData.lawyer.verificationStatus === "Pending"
+        ) {
+          setPendingApproval(true);
+          setSuccessMessage(
+            "Profile updated successfully. Your account is pending admin approval."
+          );
+          // Redirect to login after a delay
+          setTimeout(() => {
+            localStorage.removeItem("token");
+            navigate("/login");
+          }, 5000);
+        } else {
+          setSuccessMessage("Profile updated successfully");
+        }
 
-      const responseData = await response.json();
-      setLawyerData(responseData.lawyer);
-console.log(responseData  );
-      // Check if status or verificationStatus changed to Pending
-      if (
-        responseData.lawyer.status === "Pending" ||
-        responseData.lawyer.verificationStatus === "Pending"
-      ) {
-        setPendingApproval(true);
-        setSuccessMessage(
-          "Profile updated successfully. Your account is pending admin approval."
-        );
-        // Redirect to login after a delay
+        setEditMode(false);
+        setPreviewImage(null);
+        setImageError(false);
         setTimeout(() => {
-          localStorage.removeItem("token");
-          navigate("/login");
+          setSuccessMessage("");
+          setPendingApproval(false);
         }, 5000);
       } else {
-        setSuccessMessage("Profile updated successfully");
+        // Handle non-JSON response
+        const text = await response.text();
+        console.error("Non-JSON response:", text);
+        throw new Error("Server returned an invalid response. Please try again later.");
       }
-
-      setEditMode(false);
-      setPreviewImage(null);
-      setImageError(false);
-      setTimeout(() => {
-        setSuccessMessage("");
-        setPendingApproval(false);
-      }, 5000);
     } catch (err) {
       setError(err.message);
       if (
@@ -534,12 +548,24 @@ console.log(responseData  );
                 src={
                   previewImage ||
                   (lawyerData.profile_photo && !imageError
-                    ? `http://localhost:5000/Uploads/profiles/${lawyerData.profile_photo}`
+                    ? lawyerData.profile_photo.includes('/')
+                      ? `http://localhost:5000/${lawyerData.profile_photo}`
+                      : `http://localhost:5000/uploads/${lawyerData.profile_photo}`
                     : "https://placehold.co/150x150")
                 }
                 alt={lawyerData.username}
                 className="h-40 w-40 rounded-full object-cover border-4 border-white shadow-lg"
-                onError={handleImageError}
+                onError={(e) => {
+                  console.log("Image failed to load:", e.target.src);
+                  // Try alternative paths as fallback
+                  if (e.target.src.includes('/uploads/')) {
+                    e.target.src = `http://localhost:5000/Uploads/${lawyerData.profile_photo}`;
+                  } else if (e.target.src.includes('/Uploads/')) {
+                    e.target.src = `http://localhost:5000/uploads/${lawyerData.profile_photo}`;
+                  } else {
+                    handleImageError();
+                  }
+                }}
               />
             </div>
             <h1 className="text-2xl font-bold mt-4 text-center">

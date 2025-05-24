@@ -41,6 +41,13 @@ export default function FindLawyers({ userRole }) {
         const data = await response.json();
         console.log("Lawyers data:", data); 
         
+        // Log availability status for debugging
+        if (Array.isArray(data.lawyers)) {
+          data.lawyers.forEach(lawyer => {
+            console.log(`Lawyer ${lawyer.username} availability:`, lawyer.isAvailable, typeof lawyer.isAvailable);
+          });
+        }
+        
         if (Array.isArray(data)) {
           setLawyers(data);
         } else if (data.lawyers && Array.isArray(data.lawyers)) {
@@ -64,19 +71,44 @@ export default function FindLawyers({ userRole }) {
     fetchLawyers();
   }, []);
 
-  // Filter lawyers based on search term
+  // Filter lawyers based on search term and filters
   useEffect(() => {
+    console.log("Filtering lawyers with filters:", filters);
+    console.log("Available filter is:", filters.available, typeof filters.available);
+    
     const filtered = lawyers.filter((lawyer) => {
       const searchLower = searchTerm.toLowerCase();
-      return (
+      const matchesSearch = (
         (lawyer.username?.toLowerCase() || "").includes(searchLower) ||
         lawyer.specialization?.some((spec) => 
           (spec?.toLowerCase() || "").includes(searchLower)
         )
       );
+      
+      // Apply additional filters
+      const matchesSpecialization = !filters.specialization || 
+        (lawyer.specialization && lawyer.specialization.includes(filters.specialization));
+      
+      const matchesLocation = !filters.location || 
+        lawyer.location === filters.location;
+      
+      const matchesRating = !filters.minRating || 
+        (lawyer.averageRating && lawyer.averageRating >= parseInt(filters.minRating));
+      
+      // Debug availability matching
+      console.log(`Lawyer ${lawyer.username} isAvailable:`, lawyer.isAvailable);
+      console.log(`Filter available:`, filters.available);
+      console.log(`Matches availability:`, !filters.available || lawyer.isAvailable === true);
+      
+      const matchesAvailability = !filters.available || lawyer.isAvailable === true;
+      
+      return matchesSearch && matchesSpecialization && 
+             matchesLocation && matchesRating && matchesAvailability;
     });
+    
+    console.log("Filtered lawyers:", filtered.length);
     setFilteredLawyers(filtered);
-  }, [lawyers, searchTerm]);
+  }, [lawyers, searchTerm, filters]);
 
   if (loading) {
     return (
@@ -206,11 +238,24 @@ export default function FindLawyers({ userRole }) {
                 <img
                   src={
                     lawyer.profile_photo 
-                      ? `http://localhost:5000/Uploads/profiles/${lawyer.profile_photo}`
+                      ? lawyer.profile_photo.includes('/')
+                        ? `http://localhost:5000/${lawyer.profile_photo}`
+                        : `http://localhost:5000/uploads/${lawyer.profile_photo}`
                       : "/assets/default-avatar.png" // Use a local asset instead of via.placeholder.com
                   }
                   alt={lawyer.username}
                   className="h-14 w-14 rounded-full object-cover mr-3"
+                  onError={(e) => {
+                    console.log("Image failed to load:", e.target.src);
+                    // Try alternative paths as fallback
+                    if (e.target.src.includes('/uploads/')) {
+                      e.target.src = `http://localhost:5000/Uploads/${lawyer.profile_photo}`;
+                    } else if (e.target.src.includes('/Uploads/')) {
+                      e.target.src = `http://localhost:5000/uploads/${lawyer.profile_photo}`;
+                    } else {
+                      e.target.src = "/assets/default-avatar.png";
+                    }
+                  }}
                 />
                 <div>
                   <h3 className="font-semibold">{lawyer.username || "Unknown"}</h3>
@@ -242,8 +287,8 @@ export default function FindLawyers({ userRole }) {
                 
                 <div className="flex items-center">
                   <Clock size={14} className="mr-2 text-primary" />
-                  <span className={lawyer.isAvailable ? "text-green-600" : "text-red-500"}>
-                    {lawyer.isAvailable ? "Available" : "Unavailable"}
+                  <span className={lawyer.isAvailable === true ? "text-green-600" : "text-red-500"}>
+                    {lawyer.isAvailable === true ? "Available" : "Unavailable"}
                   </span>
                 </div>
               

@@ -84,9 +84,26 @@ export default function ClientLawyerProfile() {
         <div className="bg-gradient-to-r from-primary to-primary/80 p-5 text-white">
           <div className="flex items-center">
             <img
-              src={lawyer.profile_photo || "https://via.placeholder.com/150"}
+              src={
+                lawyer.profile_photo 
+                  ? lawyer.profile_photo.includes('/')
+                    ? `http://localhost:5000/${lawyer.profile_photo}`
+                    : `http://localhost:5000/uploads/${lawyer.profile_photo}`
+                  : "https://via.placeholder.com/150"
+              }
               alt={lawyer.username}
               className="h-20 w-20 rounded-full object-cover border-2 border-white mr-5"
+              onError={(e) => {
+                console.log("Image failed to load:", e.target.src);
+                // Try alternative paths as fallback
+                if (e.target.src.includes('/uploads/')) {
+                  e.target.src = `http://localhost:5000/Uploads/${lawyer.profile_photo}`;
+                } else if (e.target.src.includes('/Uploads/')) {
+                  e.target.src = `http://localhost:5000/uploads/${lawyer.profile_photo}`;
+                } else {
+                  e.target.src = "https://via.placeholder.com/150";
+                }
+              }}
             />
             <div>
               <h1 className="text-2xl font-bold mb-1">{lawyer.username}</h1>
