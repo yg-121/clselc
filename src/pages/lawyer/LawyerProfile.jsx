@@ -203,11 +203,15 @@ export default function LawyerProfile() {
   const handleFileChange = (e) => {
     const file = e.target.files[0];
     if (file) {
-      setFormData((prev) => ({ ...prev, profilePhoto: file }));
+      setFormData((prev) => ({
+        ...prev,
+        profilePhoto: file,
+      }));
+
+      // Create preview
       const reader = new FileReader();
       reader.onloadend = () => {
         setPreviewImage(reader.result);
-        setImageError(false);
       };
       reader.readAsDataURL(file);
     }
@@ -268,7 +272,7 @@ export default function LawyerProfile() {
       const response = await fetch(
         "http://localhost:5000/api/users/lawyer/profile",
         {
-          method: "PUT",
+          method: "PATCH",    
           headers: {
             Authorization: `Bearer ${token}`,
           },
@@ -283,7 +287,7 @@ export default function LawyerProfile() {
 
       const responseData = await response.json();
       setLawyerData(responseData.lawyer);
-
+console.log(responseData  );
       // Check if status or verificationStatus changed to Pending
       if (
         responseData.lawyer.status === "Pending" ||
