@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import api from "../../services/api"
 import { Card, CardContent, CardHeader, CardTitle } from "../../components/ui/card"
@@ -7,10 +7,31 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from ".
 import { Button } from "../../components/ui/button"
 import { Input } from "../../components/ui/input"
 import { Badge } from "../../components/ui/badge"
-import { Search, UserCheck, UserX, UserPlus, FileText, Shield, Trash2, AlertTriangle } from "lucide-react"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "../../components/ui/dialog"
 import { toast, ToastContainer } from "react-toastify"
 import "react-toastify/dist/ReactToastify.css"
+import { 
+  Search, 
+  UserCheck, 
+  UserX, 
+  UserPlus, 
+  FileText, 
+  Shield, 
+  Trash2, 
+  AlertTriangle, 
+  User, 
+  Mail, 
+  Briefcase, 
+  Award, 
+  Clock, 
+  Globe, 
+  Star, 
+  DollarSign, 
+  Phone, 
+  Calendar as CalendarIcon,
+  MapPin,
+  Calendar
+} from "lucide-react"
 
 // Replace the Label import with a simple label component
 const Label = ({ htmlFor, children }) => (
@@ -79,8 +100,43 @@ export default function Users() {
   const [userToAssign, setUserToAssign] = useState(null)
   const [newAdmin, setNewAdmin] = useState({ username: "", email: "", password: "" })
   const [assignSuccess, setAssignSuccess] = useState(null)
+  const [showViewUserDialog, setShowViewUserDialog] = useState(false)
+  const [viewingUser, setViewingUser] = useState(null)
+  const [userDetails, setUserDetails] = useState(null)
+  const [loadingDetails, setLoadingDetails] = useState(false)
   
   const queryClient = useQueryClient()
+  
+  // Add this function to handle viewing a user
+  const handleViewUser = async (user) => {
+    console.log("Viewing user:", user);
+    setViewingUser(user);
+    setShowViewUserDialog(true);
+    setLoadingDetails(true);
+    
+    try {
+      // Use the existing user data but ensure we have all fields
+      // You can add an API call here to fetch more detailed information if needed
+      setUserDetails({
+        ...user,
+        phone: user.phone || "",
+        location: user.location || "",
+        specialization: user.specialization || [],
+        yearsOfExperience: user.yearsOfExperience || 0,
+        bio: user.bio || "",
+        certifications: user.certifications || [],
+        hourlyRate: user.hourlyRate || 0,
+        languages: user.languages || [],
+        averageRating: user.averageRating || 0,
+        ratingCount: user.ratingCount || 0
+      });
+    } catch (error) {
+      console.error("Error fetching user details:", error);
+      toast.error("Failed to load user details");
+    } finally {
+      setLoadingDetails(false);
+    }
+  };
   
   // Fetch all users
   const { data: usersData, isLoading: isLoadingUsers, error: usersError } = useQuery({
@@ -499,7 +555,12 @@ export default function Users() {
                                 </Button>
                               )}
                               
-                              <Button size="sm" variant="outline" className="h-8">
+                              <Button 
+                                size="sm" 
+                                variant="outline" 
+                                className="h-8"
+                                onClick={() => handleViewUser(user)}
+                              >
                                 View
                               </Button>
                             </div>
@@ -846,6 +907,255 @@ export default function Users() {
               </DialogFooter>
             </>
           )}
+        </DialogContent>
+      </Dialog>
+      
+      {/* View User Dialog */}
+      <Dialog 
+        open={showViewUserDialog} 
+        onOpenChange={(open) => {
+          if (!open) {
+            setUserDetails(null);
+          }
+          setShowViewUserDialog(open);
+        }}
+      >
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <User className="h-5 w-5" />
+              User Profile: {viewingUser?.username}
+            </DialogTitle>
+          </DialogHeader>
+          
+          {loadingDetails ? (
+            <div className="flex justify-center items-center py-8">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
+            </div>
+          ) : viewingUser ? (
+            <div className="space-y-4">
+              {/* Basic info for all users */}
+              <div className="flex items-center space-x-4 mb-4">
+                <div className="h-16 w-16 rounded-full bg-gray-200 overflow-hidden">
+                  {viewingUser.profile_photo ? (
+                    <img 
+                      src={viewingUser.profile_photo.startsWith('data:') 
+                        ? viewingUser.profile_photo 
+                        : `${import.meta.env.VITE_API_URL}/${viewingUser.profile_photo}`} 
+                      alt={viewingUser.username} 
+                      className="h-full w-full object-cover"
+                    />
+                  ) : (
+                    <User className="h-full w-full p-4 text-gray-400" />
+                  )}
+                </div>
+                <div>
+                  <h3 className="text-xl font-semibold">{viewingUser.username}</h3>
+                  <div className="flex items-center text-gray-500">
+                    <Mail className="h-4 w-4 mr-1" />
+                    <span>{viewingUser.email}</span>
+                  </div>
+                  <div className="flex items-center mt-1">
+                    <Badge variant={
+                      viewingUser.role === "Admin" ? "destructive" : 
+                      viewingUser.role === "Lawyer" ? "default" : 
+                      viewingUser.role === "LegalReviewer" ? "warning" :
+                      "secondary"
+                    }>
+                      {viewingUser.role}
+                    </Badge>
+                    <Badge variant="outline" className="ml-2">
+                      {viewingUser.status === "pending" ? "Pending Approval" : "Active"}
+                    </Badge>
+                  </div>
+                </div>
+              </div>
+              
+              {/* Role-specific details */}
+              {viewingUser.role === "Lawyer" && (
+                <Tabs defaultValue="profile" className="w-full">
+                  <TabsList className="mb-4">
+                    <TabsTrigger value="profile">Profile</TabsTrigger>
+                    <TabsTrigger value="credentials">Credentials</TabsTrigger>
+                    <TabsTrigger value="cases">Cases</TabsTrigger>
+                  </TabsList>
+                  
+                  <TabsContent value="profile" className="space-y-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="p-4 border rounded-md">
+                        <h4 className="font-medium flex items-center"><Briefcase className="h-4 w-4 mr-2" /> Specialization</h4>
+                        <p className="mt-1 text-gray-600">
+                          {userDetails?.specialization?.length 
+                            ? userDetails.specialization.join(", ") 
+                            : "Not specified"}
+                        </p>
+                      </div>
+                      
+                      <div className="p-4 border rounded-md">
+                        <h4 className="font-medium flex items-center"><Clock className="h-4 w-4 mr-2" /> Experience</h4>
+                        <p className="mt-1 text-gray-600">
+                          {userDetails?.yearsOfExperience 
+                            ? `${userDetails.yearsOfExperience} years` 
+                            : "Not specified"}
+                        </p>
+                      </div>
+                      
+                      <div className="p-4 border rounded-md">
+                        <h4 className="font-medium flex items-center"><MapPin className="h-4 w-4 mr-2" /> Location</h4>
+                        <p className="mt-1 text-gray-600">
+                          {userDetails?.location || "Not specified"}
+                        </p>
+                      </div>
+                      
+                      <div className="p-4 border rounded-md">
+                        <h4 className="font-medium flex items-center"><DollarSign className="h-4 w-4 mr-2" /> Hourly Rate</h4>
+                        <p className="mt-1 text-gray-600">
+                          {userDetails?.hourlyRate 
+                            ? `${userDetails.hourlyRate} ETB` 
+                            : "Not specified"}
+                        </p>
+                      </div>
+                      
+                      <div className="p-4 border rounded-md">
+                        <h4 className="font-medium flex items-center"><Globe className="h-4 w-4 mr-2" /> Languages</h4>
+                        <p className="mt-1 text-gray-600">
+                          {userDetails?.languages?.length 
+                            ? userDetails.languages.join(", ") 
+                            : "Not specified"}
+                        </p>
+                      </div>
+                      
+                      <div className="p-4 border rounded-md">
+                        <h4 className="font-medium flex items-center"><Star className="h-4 w-4 mr-2" /> Rating</h4>
+                        <p className="mt-1 text-gray-600">
+                          {userDetails?.averageRating 
+                            ? `${userDetails.averageRating.toFixed(1)} (${userDetails.ratingCount} reviews)` 
+                            : "No ratings yet"}
+                        </p>
+                      </div>
+                    </div>
+                    
+                    {userDetails?.bio && (
+                      <div className="p-4 border rounded-md">
+                        <h4 className="font-medium">Bio</h4>
+                        <p className="mt-1 text-gray-600">{userDetails.bio}</p>
+                      </div>
+                    )}
+                  </TabsContent>
+                  
+                  <TabsContent value="credentials" className="space-y-4">
+                    <div className="p-4 border rounded-md">
+                      <h4 className="font-medium flex items-center"><Award className="h-4 w-4 mr-2" /> Certifications</h4>
+                      {userDetails?.certifications?.length ? (
+                        <ul className="mt-2 list-disc list-inside text-gray-600">
+                          {userDetails.certifications.map((cert, index) => (
+                            <li key={index}>{cert}</li>
+                          ))}
+                        </ul>
+                      ) : (
+                        <p className="mt-1 text-gray-600">No certifications listed</p>
+                      )}
+                    </div>
+                    
+                    <div className="p-4 border rounded-md">
+                      <h4 className="font-medium flex items-center"><FileText className="h-4 w-4 mr-2" /> License</h4>
+                      {viewingUser.license_file ? (
+                        <Button 
+                          variant="outline" 
+                          size="sm"
+                          onClick={() => openLicenseFile(viewingUser.license_file)}
+                          className="mt-2"
+                        >
+                          <FileText className="h-4 w-4 mr-2" />
+                          View License
+                        </Button>
+                      ) : (
+                        <p className="mt-1 text-gray-600">No license file available</p>
+                      )}
+                    </div>
+                  </TabsContent>
+                  
+                  <TabsContent value="cases">
+                    <div className="p-4 border rounded-md">
+                      <h4 className="font-medium">Case History</h4>
+                      <p className="mt-1 text-gray-600">Case history not available in this view</p>
+                    </div>
+                  </TabsContent>
+                </Tabs>
+              )}
+              
+              {viewingUser.role === "Client" && (
+                <div className="space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="p-4 border rounded-md">
+                      <h4 className="font-medium flex items-center"><Phone className="h-4 w-4 mr-2" /> Contact</h4>
+                      <p className="mt-1 text-gray-600">
+                        {userDetails?.phone || "Not provided"}
+                      </p>
+                    </div>
+                    
+                    <div className="p-4 border rounded-md">
+                      <h4 className="font-medium flex items-center"><MapPin className="h-4 w-4 mr-2" /> Location</h4>
+                      <p className="mt-1 text-gray-600">
+                        {userDetails?.location || "Not provided"}
+                      </p>
+                    </div>
+                    
+                    <div className="p-4 border rounded-md">
+                      <h4 className="font-medium flex items-center"><CalendarIcon className="h-4 w-4 mr-2" /> Joined</h4>
+                      <p className="mt-1 text-gray-600">
+                        {userDetails?.createdAt 
+                          ? new Date(userDetails.createdAt).toLocaleDateString() 
+                          : "Unknown"}
+                      </p>
+                    </div>
+                  </div>
+                  
+                  <div className="p-4 border rounded-md">
+                    <h4 className="font-medium">Case History</h4>
+                    <p className="mt-1 text-gray-600">Case history not available in this view</p>
+                  </div>
+                </div>
+              )}
+              
+              {(viewingUser.role === "Admin" || viewingUser.role === "LegalReviewer") && (
+                <div className="space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="p-4 border rounded-md">
+                      <h4 className="font-medium flex items-center"><Phone className="h-4 w-4 mr-2" /> Contact</h4>
+                      <p className="mt-1 text-gray-600">
+                        {userDetails?.phone || "Not provided"}
+                      </p>
+                    </div>
+                    
+                    <div className="p-4 border rounded-md">
+                      <h4 className="font-medium flex items-center"><CalendarIcon className="h-4 w-4 mr-2" /> Joined</h4>
+                      <p className="mt-1 text-gray-600">
+                        {userDetails?.createdAt 
+                          ? new Date(userDetails.createdAt).toLocaleDateString() 
+                          : "Unknown"}
+                      </p>
+                    </div>
+                  </div>
+                  
+                  {viewingUser.role === "LegalReviewer" && (
+                    <div className="p-4 border rounded-md">
+                      <h4 className="font-medium">Review History</h4>
+                      <p className="mt-1 text-gray-600">Review history not available in this view</p>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="text-center py-4 text-gray-500">
+              Failed to load user details
+            </div>
+          )}
+          
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowViewUserDialog(false)}>Close</Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
       

@@ -1,4 +1,4 @@
-import React, { useState, useContext, useEffect } from "react";
+import React, { useState, useContext, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery, QueryClient, QueryClientProvider, useQueryClient } from "@tanstack/react-query";
 import api from "../../services/api.js";
@@ -11,6 +11,7 @@ import {
   AlertTriangle,
   LogOut,
   Download,
+  Eye,
 } from "lucide-react";
 import {
   Card,
@@ -28,24 +29,42 @@ import {
   DialogFooter,
 } from "../../components/ui/dialog.jsx";
 
-// Inline CSS to ensure textarea is LTR
+// Add this style definition
 const styles = `
-  .ltr-wrapper {
-    direction: ltr !important;
-  }
-  .ltr-wrapper .comment-textarea,
-  .comment-textarea {
+  .ltr-textarea {
     direction: ltr !important;
     text-align: left !important;
-    unicode-bidi: normal !important;
-    writing-mode: horizontal-tb !important;
+    unicode-bidi: plaintext !important;
+    width: 100%;
+    padding: 0.5rem;
+    border: 1px solid #e2e8f0;
+    border-radius: 0.375rem;
+    min-height: 6rem;
+    font-family: inherit;
+    font-size: inherit;
   }
-  /* Global reset for all textareas as a fallback */
-  textarea {
-    direction: ltr !important;
-    text-align: left !important;
-    unicode-bidi: normal !important;
-    writing-mode: horizontal-tb !important;
+  
+  .dialog-content-stable {
+    transform: translate3d(0, 0, 0);
+    backface-visibility: hidden;
+    perspective: 1000px;
+    max-width: 500px;
+    width: 90%;
+    margin: 0 auto;
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+  }
+  
+  /* Override any existing dialog positioning */
+  [data-radix-popper-content-wrapper] {
+    position: fixed !important;
+    top: 50% !important;
+    left: 50% !important;
+    transform: translate(-50%, -50%) !important;
+    max-width: 500px !important;
+    width: 90% !important;
   }
 `;
 
@@ -89,22 +108,22 @@ function ReviewerDashboardContent() {
       return licenseFile;
     }
 
-    // Ensure the path starts with a slash
-    let path = licenseFile.startsWith("/") ? licenseFile : `/${licenseFile}`;
-  
-    // Remove /api prefix if it exists in the path
-    if (path.startsWith("/api/")) {
-      path = path.substring(4);
-    }
-  
-    // Check if path includes 'uploads' directory
-    if (!path.includes("/uploads/") && !path.includes("/Uploads/")) {
-      path = `/uploads${path}`;
+    // If it's already a full URL, return it directly
+    if (licenseFile.startsWith("http://") || licenseFile.startsWith("https://")) {
+      return licenseFile;
     }
 
-    // Construct the full URL with proper slash between base URL and path
+    // Extract just the filename from the path
+    const filename = licenseFile.split('/').pop();
+    
+    // Construct the URL using the server's base URL
     const baseUrl = import.meta.env.VITE_API_URL || "http://localhost:5000";
-    return `${baseUrl}${path}`;
+    
+    // Remove any trailing slash from baseUrl
+    const cleanBaseUrl = baseUrl.endsWith('/') ? baseUrl.slice(0, -1) : baseUrl;
+    
+    // Return the direct path to the file
+    return `${cleanBaseUrl}/uploads/${filename}`;
   };
 
   // Function to handle viewing license
@@ -115,13 +134,11 @@ function ReviewerDashboardContent() {
     }
 
     const licenseUrl = getLicenseFileUrl(licenseFile);
-    console.log("Opening license file:", licenseUrl);
+    console.log("Original license file path:", licenseFile);
+    console.log("Converted license URL:", licenseUrl);
 
     setSelectedLicense(licenseUrl);
     setShowLicenseDialog(true);
-
-    // Debug to verify state is changing
-    console.log("Dialog should be open now:", true);
   };
 
   // Function to download license file
@@ -137,6 +154,33 @@ function ReviewerDashboardContent() {
     document.body.removeChild(a);
   };
 
+  // Add this function to directly open the license file
+  const openLicenseFile = (licenseFile, e) => {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+    
+    if (!licenseFile) {
+      toast.warning("No license file available");
+      return;
+    }
+    
+    // Use the getLicenseFileUrl function to get the proper URL
+    const licenseUrl = getLicenseFileUrl(licenseFile);
+    
+    // Create a temporary anchor element to force an external link
+    const a = document.createElement('a');
+    a.href = licenseUrl;
+    a.target = '_blank';
+    a.rel = 'noopener noreferrer';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    
+    console.log("Opening license file at:", licenseUrl);
+  };
+
   // Fetch all lawyers data (not just pending)
   const {
     data: allLawyersData,
@@ -148,46 +192,34 @@ function ReviewerDashboardContent() {
     queryFn: async () => {
       try {
         console.log("Fetching lawyers...");
-        // First try to get all lawyers
-        const response = await api.get("/users/lawyers");
-        console.log("All lawyers response:", response.data);
+        
+        // Skip the /users/lawyers endpoint and go directly to pending-lawyers
+        console.log("Fetching pending lawyers directly...");
+        const pendingResponse = await api.get("/users/pending-lawyers");
+        console.log("Pending lawyers response:", pendingResponse.data);
 
-        // If that doesn't work or returns empty, try the pending-lawyers endpoint
-        if (!response.data?.lawyers || response.data.lawyers.length === 0) {
-          console.log("No lawyers found, trying pending-lawyers endpoint...");
-          const pendingResponse = await api.get("/users/pending-lawyers");
-          console.log("Pending lawyers response:", pendingResponse.data);
-
-          // Return pending lawyers with status explicitly set to "Pending"
-          return (pendingResponse.data?.pendingLawyers || []).map((lawyer) => ({
-            ...lawyer,
-            status: "Pending", // Ensure status is set
-          }));
-        }
-
-        // Return all lawyers
-        return response.data?.lawyers || [];
+        // Return pending lawyers with status explicitly set to "Pending"
+        return (pendingResponse.data?.pendingLawyers || []).map((lawyer) => ({
+          ...lawyer,
+          status: "Pending", // Ensure status is set
+        }));
       } catch (error) {
         console.error("Error fetching lawyers:", error);
         
-        // If it's a permission error, try the pending-lawyers endpoint
-        if (error.response?.status === 403) {
-          try {
-            console.log("Permission denied, trying pending-lawyers endpoint...");
-            const pendingResponse = await api.get("/users/pending-lawyers");
-            console.log("Pending lawyers response:", pendingResponse.data);
-            
-            return (pendingResponse.data?.pendingLawyers || []).map((lawyer) => ({
-              ...lawyer,
-              status: "Pending",
-            }));
-          } catch (fallbackError) {
-            console.error("Fallback also failed:", fallbackError);
-            throw error; // Throw the original error
-          }
+        // Try the pending-lawyers endpoint as fallback
+        try {
+          console.log("Trying pending-lawyers endpoint as fallback...");
+          const pendingResponse = await api.get("/users/pending-lawyers");
+          console.log("Pending lawyers response:", pendingResponse.data);
+          
+          return (pendingResponse.data?.pendingLawyers || []).map((lawyer) => ({
+            ...lawyer,
+            status: "Pending",
+          }));
+        } catch (fallbackError) {
+          console.error("Fallback also failed:", fallbackError);
+          throw error; // Throw the original error
         }
-        
-        throw error;
       }
     },
     refetchOnWindowFocus: false,
@@ -293,29 +325,6 @@ function ReviewerDashboardContent() {
     [combinedLawyers]
   );
 
-  // Helper function to make API call with timeout
-  const apiWithTimeout = async (method, url, data, timeout = 10000) => {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), timeout);
-
-    try {
-      const response = await api({
-        method,
-        url,
-        data,
-        signal: controller.signal,
-      });
-      clearTimeout(timeoutId);
-      return response;
-    } catch (error) {
-      clearTimeout(timeoutId);
-      if (error.name === "AbortError") {
-        throw new Error("Request timed out");
-      }
-      throw error;
-    }
-  };
-
   // Handle approve lawyer
   const handleApproveLawyer = async (lawyerId) => {
     const startTime = performance.now(); // Debug: Measure start time
@@ -341,7 +350,8 @@ function ReviewerDashboardContent() {
     );
 
     try {
-      const response = await apiWithTimeout("put", "/users/approve-lawyer", {
+      // Use api.put directly instead of apiWithTimeout
+      const response = await api.put("/users/approve-lawyer", {
         lawyerId,
         comments: actionComments || "No comments provided",
       });
@@ -397,7 +407,8 @@ function ReviewerDashboardContent() {
     );
 
     try {
-      const response = await apiWithTimeout("put", "/users/reject-lawyer", {
+      // Use api.put directly instead of apiWithTimeout
+      const response = await api.put("/users/reject-lawyer", {
         lawyerId,
         comments: actionComments,
       });
@@ -430,33 +441,53 @@ function ReviewerDashboardContent() {
   };
 
   // Action Dialog for Approve/Reject
-  const ActionDialog = ({ lawyer, action }) => (
-    <Dialog
-      open={showActionDialog === `${lawyer._id}-${action}`}
-      onOpenChange={() => {
-        setShowActionDialog(null);
-        setActionComments("");
-      }}
-    >
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>
-            {action === "approve" ? "Approve" : "Reject"} Lawyer: {lawyer.username || lawyer.name}
-          </DialogTitle>
-        </DialogHeader>
-        <div className="py-4">
-          <label className="block text-sm font-medium mb-1">
-            Comments {action === "reject" ? "(Required)" : "(Optional)"}
-          </label>
-          <div className="ltr-wrapper">
+  const ActionDialog = ({ lawyer, action }) => {
+    // Use a ref to avoid re-renders
+    const textareaRef = useRef(null);
+    
+    const handleConfirm = () => {
+      const commentValue = textareaRef.current ? textareaRef.current.value : "";
+      
+      if (action === "reject" && !commentValue.trim()) {
+        toast.error("Comments are required for rejection");
+        return;
+      }
+      
+      // Set the comments value from the ref
+      setActionComments(commentValue);
+      
+      if (action === "approve") {
+        handleApproveLawyer(lawyer._id);
+      } else {
+        handleRejectLawyer(lawyer._id);
+      }
+    };
+    
+    return (
+      <Dialog
+        open={showActionDialog === `${lawyer._id}-${action}`}
+        onOpenChange={() => {
+          setShowActionDialog(null);
+          setActionComments("");
+        }}
+      >
+        <DialogContent className="dialog-content-stable mx-auto">
+          <DialogHeader>
+            <DialogTitle>
+              {action === "approve" ? "Approve" : "Reject"} Lawyer: {lawyer.username || lawyer.name}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="py-4">
+            <label className="block text-sm font-medium mb-1">
+              Comments {action === "reject" ? "(Required)" : "(Optional)"}
+            </label>
             <textarea
-              value={actionComments}
-              onChange={(e) => setActionComments(e.target.value)}
-              className="w-full p-2 border rounded-md comment-textarea"
-              style={{ direction: "ltr", textAlign: "left", unicodeBidi: "normal", writingMode: "horizontal-tb" }}
+              ref={textareaRef}
+              defaultValue={actionComments}
+              className="ltr-textarea"
+              rows={4}
               lang="en"
               dir="ltr"
-              rows={4}
               placeholder={
                 action === "reject"
                   ? "Please provide a reason for rejection"
@@ -464,41 +495,31 @@ function ReviewerDashboardContent() {
               }
             />
           </div>
-        </div>
-        <DialogFooter>
-          <Button
-            variant="outline"
-            onClick={() => {
-              setShowActionDialog(null);
-              setActionComments("");
-            }}
-          >
-            Cancel
-          </Button>
-          <Button
-            onClick={() => {
-              if (action === "reject" && !actionComments.trim()) {
-                toast.error("Comments are required for rejection");
-                return;
-              }
-              if (action === "approve") {
-                handleApproveLawyer(lawyer._id);
-              } else {
-                handleRejectLawyer(lawyer._id);
-              }
-            }}
-            disabled={loadingActions[lawyer._id]}
-          >
-            {loadingActions[lawyer._id] ? (
-              <span className="animate-spin">⌛</span>
-            ) : (
-              "Confirm"
-            )}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setShowActionDialog(null);
+                setActionComments("");
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleConfirm}
+              disabled={loadingActions[lawyer._id]}
+            >
+              {loadingActions[lawyer._id] ? (
+                <span className="animate-spin">⌛</span>
+              ) : (
+                "Confirm"
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    );
+  };
 
   // Show error state
   if (lawyersError) {
@@ -760,52 +781,27 @@ function ReviewerDashboardContent() {
               <div className="space-y-4">
                 {/* PDF Viewer */}
                 <div className="w-full h-[70vh] border rounded-md overflow-hidden bg-gray-100">
-                  <iframe
-                    src={selectedLicense}
-                    className="w-full h-full"
-                    title="License Document"
-                    onError={(e) => {
-                      console.error("Error loading license file:", e);
-                      e.target.style.display = "none";
-                      e.target.parentNode.innerHTML += `
-                        <div class="flex flex-col items-center justify-center h-full p-4">
-                          <AlertTriangle className="h-12 w-12 text-amber-500 mb-4" />
-                          <p class="text-center text-gray-700">
-                            Failed to load the license file. The file might not exist or you may not have permission to view it.
-                          </p>
-                        </div>
-                      `;
-                    }}
-                  />
+                  <LicenseViewer licenseFile={selectedLicense} getLicenseFileUrl={getLicenseFileUrl} />
                 </div>
-
-                {/* Show file URL for debugging */}
-                <div className="p-2 bg-gray-100 rounded text-sm">
-                  <p>
-                    <strong>File URL:</strong> {selectedLicense}
-                  </p>
+                
+                {/* Debug info */}
+                <div className="p-2 bg-gray-100 rounded text-xs">
+                  <p><strong>Original path:</strong> {selectedLicense}</p>
+                  <p><strong>Converted URL:</strong> {getLicenseFileUrl(selectedLicense)}</p>
                 </div>
-
-                {/* Direct link as fallback */}
-                <div className="text-center">
+                
+                {/* Direct download link */}
+                <div className="text-center p-4 border rounded-md bg-gray-50">
+                  <p className="mb-4">If the viewer doesn't work, try downloading the file:</p>
                   <a
-                    href={selectedLicense}
+                    href={getLicenseFileUrl(selectedLicense)}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="text-blue-600 hover:underline"
+                    className="inline-block px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded"
                   >
-                    Open in new tab if not displaying correctly
+                    Download License File
                   </a>
                 </div>
-
-                {/* Download button */}
-                <Button
-                  onClick={downloadLicenseFile}
-                  className="w-full bg-blue-600 hover:bg-blue-700 text-white"
-                >
-                  <Download className="h-4 w-4 mr-2" />
-                  Download License
-                </Button>
               </div>
             ) : (
               <div className="text-center text-gray-500 py-8">
@@ -823,6 +819,50 @@ function ReviewerDashboardContent() {
     </div>
   );
 }
+
+const LicenseViewer = ({ licenseFile, getLicenseFileUrl }) => {
+  const [error, setError] = useState(false);
+  
+  // Generate the URL
+  const url = getLicenseFileUrl(licenseFile);
+  
+  // Log the URL for debugging
+  console.log("License file URL:", url);
+  
+  if (error) {
+    return (
+      <div className="flex flex-col items-center justify-center h-full p-4">
+        <div className="text-amber-500 mb-4">
+          <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+            <line x1="12" y1="9" x2="12" y2="13"></line>
+            <line x1="12" y1="17" x2="12.01" y2="17"></line>
+          </svg>
+        </div>
+        <p className="text-center text-gray-700 mb-4">
+          Failed to load the license file. Please try downloading it instead.
+        </p>
+        <a
+          href={url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-blue-600 hover:underline"
+        >
+          Download License File
+        </a>
+      </div>
+    );
+  }
+  
+  return (
+    <iframe
+      src={url}
+      className="w-full h-full"
+      title="License Document"
+      onError={() => setError(true)}
+    />
+  );
+};
 
 export default function LegalReviewerDashboard() {
   return (

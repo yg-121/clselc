@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react'; // Added useRef for scrolling
 import { useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../../hooks/authHooks';
 import { useApi } from '../../hooks/useApi';
@@ -27,6 +27,7 @@ const Messages = () => {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [chatToDelete, setChatToDelete] = useState(null);
   const navigate = useNavigate();
+  const chatContainerRef = useRef(null); // Ref for auto-scrolling
 
   useEffect(() => {
     if (authLoading) return;
@@ -94,7 +95,8 @@ const Messages = () => {
         console.log('[Messages] New message:', msg);
         setChatHistory((prev) => {
           if (msg.sender._id === selectedUser || msg.receiver._id === authUser._id) {
-            return [...prev, msg];
+            const updatedHistory = [...prev, msg].sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt)); // Sort after adding new message
+            return updatedHistory;
           }
           return prev;
         });
@@ -169,9 +171,9 @@ const Messages = () => {
           setChatHistory([]);
           return;
         }
-        const filteredChats = response.data.chats.filter(
-          (chat) => chat.sender._id === selectedUser || chat.receiver._id === selectedUser
-        );
+        const filteredChats = response.data.chats
+          .filter((chat) => chat.sender._id === selectedUser || chat.receiver._id === selectedUser)
+          .sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt)); // Sort messages oldest to newest
         setChatHistory(filteredChats);
 
         const unreadChats = filteredChats.filter(
@@ -208,6 +210,13 @@ const Messages = () => {
 
     fetchChatHistory();
   }, [selectedUser, authUser]);
+
+  // Auto-scroll to the bottom when chatHistory updates
+  useEffect(() => {
+    if (chatContainerRef.current) {
+      chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
+    }
+  }, [chatHistory]);
 
   const handleFileChange = (e) => {
     const selectedFile = e.target.files[0];
@@ -249,7 +258,10 @@ const Messages = () => {
         throw new Error(response.error || 'Invalid response: No chat data');
       }
       console.log('[Messages] Send message response:', response.data);
-      setChatHistory((prev) => [...prev, response.data.chat]);
+      setChatHistory((prev) => {
+        const updatedHistory = [...prev, response.data.chat].sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt)); // Sort after sending new message
+        return updatedHistory;
+      });
       setRecentChats((prev) => {
         const otherUser = {
           id: selectedUser,
@@ -414,7 +426,10 @@ const Messages = () => {
               </DropdownMenu>
             </motion.div>
 
-            <div className="flex-1 p-4 overflow-y-auto bg-gradient-to-b from-gray-50 to-gray-100">
+            <div
+              ref={chatContainerRef} // Added ref for auto-scrolling
+              className="flex-1 p-4 overflow-y-auto bg-gradient-to-b from-gray-50 to-gray-100 flex flex-col" // Added flex flex-col for proper message ordering
+            >
               {chatHistory.length === 0 ? (
                 <p className="text-gray-500 text-center mt-10">No messages yet</p>
               ) : (
@@ -424,7 +439,7 @@ const Messages = () => {
                       key={chat._id}
                       className={`flex mb-3 ${
                         chat.sender._id === authUser._id ? 'justify-end' : 'justify-start'
-                      }`}
+                      }`} // Sender on right, receiver on left (already correct)
                       initial={{ opacity: 0, x: chat.sender._id === authUser._id ? 50 : -50 }}
                       animate={{ opacity: 1, x: 0 }}
                       exit={{ opacity: 0, x: chat.sender._id === authUser._id ? 50 : -50 }}

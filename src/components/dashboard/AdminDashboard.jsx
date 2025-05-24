@@ -21,10 +21,9 @@ import AuditLogs from "../../pages/admin/AuditLogs.jsx"
 import Profile from "../../pages/admin/Profile.jsx"
 import ErrorAlert from "../admin/ErrorAlert.jsx"
 import { Badge } from "../ui/badge.jsx"
-import api from "../../services/api.js"  // Import the API service
-import { initializeSocket, disconnectSocket } from "../../utils/socketUtils.js";
+import api from "../../services/api.js"
+import { connectSocket, disconnectSocket } from "../../utils/socketUtils.js";
 
-// Create a client for React Query
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {  
@@ -42,14 +41,14 @@ const AdminDashboard = () => {
   const [notificationCount, setNotificationCount] = useState(0)
   const navigate = useNavigate()
 
-  // Fetch unread notification count with more debugging
   const fetchNotificationCount = async () => {
     try {
       console.log("Fetching notification count...");
+      const token = localStorage.getItem("token");
+      if (!token) throw new Error("No token found");
       const response = await api.get("/notifications/admin/notifications");
       console.log("Notification response:", response.data);
       
-      // Use the unreadCount from the API response
       if (response.data && typeof response.data.unreadCount === 'number') {
         console.log("Unread notification count from API:", response.data.unreadCount);
         setNotificationCount(response.data.unreadCount);
@@ -58,59 +57,118 @@ const AdminDashboard = () => {
         setNotificationCount(0);
       }
     } catch (error) {
-      console.error("Failed to fetch notification count:", error);
+      console.error("Failed to fetch notification count:", error.message);
       setError("Failed to fetch notifications");
-      setNotificationCount(0); // Set to 0 on error
+      setNotificationCount(0);
     }
   };
 
-  // Call fetchNotificationCount when the component mounts
   useEffect(() => {
     fetchNotificationCount();
-    // Set up a timer to refresh the count periodically
-    const intervalId = setInterval(fetchNotificationCount, 30000); // Every 30 seconds
+    const intervalId = setInterval(fetchNotificationCount, 30000);
     
     return () => {
-      clearInterval(intervalId); // Clean up on unmount
+      clearInterval(intervalId);
     };
   }, []);
 
   useEffect(() => {
-    // Check if user is admin
     if (!user || user.role !== "Admin") {
       navigate("/login");
       return;
     }
 
-    // Initialize socket with better error handling
     let socketInstance = null;
-    try {
-      socketInstance = initializeSocket();
-      if (socketInstance) {
-        console.log("Socket initialized in AdminDashboard");
-        
-        socketInstance.on("new_notification", (data) => {
-          console.log("New notification received:", data);
-          setNotificationCount((prev) => prev + 1);
-          queryClient.invalidateQueries("notifications");
-        });
-        
-        setSocket(socketInstance);
+    let connectionTimeout = null;
+    let retryAttempts = 3;
+    let retryInterval = null;
+
+    const initializeSocket = () => {
+      const token = localStorage.getItem("token");
+      if (user?._id && token) {
+        try {
+          console.log("Initializing socket with userId:", user._id, "Token present:", !!token);
+          socketInstance = connectSocket(user._id);
+          if (socketInstance) {
+            socketInstance.on("connect", () => {
+              console.log("Socket connected for admin dashboard:", socketInstance.id);
+              retryAttempts = 3; // Reset retries on success
+              clearInterval(retryInterval);
+            });
+
+            socketInstance.on("new_admin_notification", (notification) => {
+              console.log("New admin notification received:", notification);
+              setNotificationCount((prev) => prev + 1);
+              queryClient.invalidateQueries("notifications");
+            });
+
+            socketInstance.on("connect_error", (err) => {
+              console.error("Socket connection error in AdminDashboard:", err.message);
+              setError("Failed to connect to real-time notifications: " + err.message);
+              if (retryAttempts > 0) {
+                retryAttempts--;
+                console.log(`Retrying socket connection (${retryAttempts} attempts left)`);
+              } else {
+                clearInterval(retryInterval);
+              }
+            });
+
+            socketInstance.on("error", (err) => {
+              console.error("Socket error in AdminDashboard:", err.message);
+            });
+
+            setSocket(socketInstance);
+          } else {
+            console.warn("Failed to initialize socket: connectSocket returned null");
+            if (retryAttempts > 0) {
+              retryAttempts--;
+              console.log(`Retrying socket connection (${retryAttempts} attempts left)`);
+            }
+          }
+        } catch (error) {
+          console.error("Error initializing socket in AdminDashboard:", error.message);
+          setError("Failed to initialize real-time notifications");
+          if (retryAttempts > 0) {
+            retryAttempts--;
+            console.log(`Retrying socket connection (${retryAttempts} attempts left)`);
+          }
+        }
       } else {
-        console.warn("Failed to initialize socket in AdminDashboard");
+        console.warn("Cannot initialize socket: Missing userId or token", { userId: user?._id, hasToken: !!token });
+        setError("Cannot connect to notifications: Missing authentication data");
       }
-    } catch (error) {
-      console.error("Error initializing socket in AdminDashboard:", error);
-    }
+    };
+
+    // Delay initial connection to avoid page load issues
+    connectionTimeout = setTimeout(() => {
+      initializeSocket();
+      retryInterval = setInterval(() => {
+        if (!socketInstance || !socketInstance.connected) {
+          console.log("Retrying socket connection...");
+          initializeSocket();
+        } else {
+          clearInterval(retryInterval);
+        }
+      }, 5000);
+    }, 1000);
 
     return () => {
-      // Clean up socket connection
+      if (connectionTimeout) {
+        clearTimeout(connectionTimeout);
+      }
+      if (retryInterval) {
+        clearInterval(retryInterval);
+      }
       if (socketInstance) {
         try {
-          socketInstance.off("new_notification");
+          socketInstance.off("connect");
+          socketInstance.off("new_admin_notification");
+          socketInstance.off("connect_error");
+          socketInstance.off("error");
           disconnectSocket();
+          console.log("Socket disconnected from AdminDashboard");
         } catch (error) {
-          console.error("Error disconnecting socket:", error);
+          console.error("Error disconnecting socket:", error.message);
         }
       }
     };
@@ -124,13 +182,12 @@ const AdminDashboard = () => {
     setError("")
   }
 
-  // Function to reset notification count (called after marking notifications as read)
   const resetNotificationCount = () => {
     fetchNotificationCount();
   };
 
   if (!user) {
-    return null // Will be redirected by useEffect
+    return null
   }
 
   const navItems = [
@@ -170,7 +227,6 @@ const AdminDashboard = () => {
   return (
     <QueryClientProvider client={queryClient}>
       <div className="min-h-screen bg-background flex">
-        {/* Mobile sidebar backdrop */}
         {sidebarOpen && (
           <div 
             className="fixed inset-0 bg-black/50 z-20 md:hidden" 
@@ -178,7 +234,6 @@ const AdminDashboard = () => {
           ></div>
         )}
 
-        {/* Sidebar */}
         <aside
           className={`bg-card text-card-foreground fixed md:sticky top-0 z-30 h-screen transition-all duration-300 ease-in-out ${
             sidebarOpen ? "w-64 translate-x-0" : "-translate-x-full md:translate-x-0 md:w-20"
@@ -226,9 +281,7 @@ const AdminDashboard = () => {
           </ScrollArea>
         </aside>
 
-        {/* Main content */}
         <div className="flex-1 flex flex-col min-h-screen">
-          {/* Header */}
           <header className="bg-card border-b h-16 flex items-center justify-between px-4 sticky top-0 z-10">
             <div className="flex items-center">
               <Button 
@@ -283,7 +336,6 @@ const AdminDashboard = () => {
             </div>
           </header>
 
-          {/* Main content */}
           <main className="flex-1 p-4 md:p-6 overflow-auto">
             {error && <ErrorAlert message={error} onClose={clearError} />}
 
@@ -306,13 +358,4 @@ const AdminDashboard = () => {
     </QueryClientProvider>
   )
 }
-
 export default AdminDashboard
-
-
-
-
-
-
-
-

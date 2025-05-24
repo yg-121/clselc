@@ -1,7 +1,6 @@
-
 import { useState, useEffect } from "react";
-import { useAuth } from "../../hooks/authHooks";
-import { connectSocket, disconnectSocket } from "../../utils/socket";
+import { useAuth } from "../../hooks/authHooks.js";
+import { connectSocket, disconnectSocket } from "../../utils/socket.js";
 import { Bell, Check, AlertCircle, Info, Mail, Calendar, MessageSquare, ChevronLeft, ChevronRight } from "lucide-react";
 import { toast } from "react-toastify";
 import axios from "axios";
@@ -19,17 +18,17 @@ export default function AdminNotifications() {
     setIsLoading(true);
     try {
       const token = localStorage.getItem("token");
-      if (!token) return;
+      if (!token) throw new Error("No token found");
       
-      const response = await axios.get("http://localhost:5000/api/notifications/notifications", {
+      const response = await axios.get("http://localhost:5000/api/notifications/admin/notifications", {
         headers: { Authorization: `Bearer ${token}` }
       });
       
-      setNotifications(response.data || []);
+      setNotifications(response.data.notifications || []);
       setError(null);
     } catch (err) {
       console.error("Failed to fetch notifications:", err);
-      setError("Failed to load notifications");
+      setError(err.response?.data?.message || "Failed to load notifications");
     } finally {
       setIsLoading(false);
     }
@@ -43,26 +42,30 @@ export default function AdminNotifications() {
 
     // Connect to Socket.IO for real-time notifications
     let socket = null;
-    if (user?._id) {
+    if (user?._id && localStorage.getItem("token")) {
       socket = connectSocket(user._id);
       
-      // Handle socket reconnection
-      const handleReconnect = () => {
-        console.log('Socket reconnected, refreshing notifications');
+      socket.on('connect', () => {
+        console.log('Socket connected, refreshing notifications');
         fetchNotifications();
-      };
-      
-      socket.on('connect', handleReconnect);
-      socket.on('new_notification', (notification) => {
+      });
+
+      socket.on('new_admin_notification', (notification) => {
         setNotifications((prev) => [notification, ...prev]);
         toast.info(notification.message);
+      });
+
+      socket.on('connect_error', (err) => {
+        console.error('Socket connection error:', err.message);
+        setError("Failed to connect to real-time notifications");
       });
     }
 
     return () => {
       if (socket) {
         socket.off('connect');
-        socket.off('new_notification');
+        socket.off('new_admin_notification');
+        socket.off('connect_error');
         disconnectSocket();
       }
     };
@@ -71,13 +74,12 @@ export default function AdminNotifications() {
   const markAsRead = async (notificationId) => {
     try {
       const token = localStorage.getItem("token");
-      if (!token) return;
+      if (!token) throw new Error("No token found");
       
-      await axios.patch(`http://localhost:5000/api/notifications/notifications/${notificationId}/read`, {}, {
+      await axios.patch(`http://localhost:5000/api/notifications/${notificationId}/read`, {}, {
         headers: { Authorization: `Bearer ${token}` }
       });
       
-      // Update local state
       setNotifications(
         notifications.map((notification) =>
           notification._id === notificationId ? { ...notification, status: "Read" } : notification
@@ -87,14 +89,14 @@ export default function AdminNotifications() {
       toast.success("Marked as read");
     } catch (err) {
       console.error("Failed to mark notification as read:", err);
-      toast.error("Failed to update");
+      toast.error(err.response?.data?.message || "Failed to update");
     }
   };
 
   const markAllAsRead = async () => {
     try {
       const token = localStorage.getItem("token");
-      if (!token) return;
+      if (!token) throw new Error("No token found");
       
       await axios.patch("http://localhost:5000/api/notifications/mark-all-read", {}, {
         headers: { Authorization: `Bearer ${token}` }
@@ -106,7 +108,7 @@ export default function AdminNotifications() {
       toast.success("All marked as read");
     } catch (err) {
       console.error("Failed to mark all notifications as read:", err);
-      toast.error("Failed to update");
+      toast.error(err.response?.data?.message || "Failed to update");
     }
   };
 
@@ -310,10 +312,3 @@ export default function AdminNotifications() {
     </div>
   );
 }
-
-
-
-
-
-
-

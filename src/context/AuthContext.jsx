@@ -31,12 +31,18 @@ export const AuthProvider = ({ children }) => {
             throw new Error('Invalid role');
           }
           console.log("User fetch response:", response.data);
-          const userData = storedRole === 'Lawyer' ? response.data.lawyer : response.data.user;
+
+          // Handle varying response structures
+          const userData = storedRole === 'Admin' ? response.data : (response.data.user || response.data.lawyer);
+          if (!userData || !userData._id || !userData.username || !userData.role) {
+            throw new Error('Invalid user data structure');
+          }
+
           setUser({
             _id: userData._id,
             username: userData.username,
             role: userData.role,
-            status: userData.status,
+            status: userData.status || 'Active',
           });
           setToken(storedToken);
         } catch (err) {
@@ -49,6 +55,8 @@ export const AuthProvider = ({ children }) => {
           setToken(null);
           setError("Failed to initialize session. Please log in again.");
         }
+      } else {
+        console.log("No stored auth data found");
       }
       setLoading(false);
     };

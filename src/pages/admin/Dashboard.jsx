@@ -9,28 +9,20 @@ import {
   Users, Briefcase, UserCheck, Clock, Activity, 
   Calendar, TrendingUp, AlertCircle 
 } from "lucide-react"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "../../components/ui/tabs.jsx";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "../../components/ui/tabs.jsx";
 
 export default function Dashboard() {
-  // Fetch admin stats with more detailed debugging
   const { data: dashboardData, isLoading: isLoadingStats, error: statsError } = useQuery({
     queryKey: ['dashboardData'],
     queryFn: async () => {
       try {
         console.log("🔍 Fetching admin stats...")
-        
-        // Log the API URL being used
         console.log("🔍 API URL:", api.defaults.baseURL || "No base URL set")
-        
-        // Make the API call with detailed logging
         console.log("🔍 Making API call to /notifications/admin/stats")
         const response = await api.get("/notifications/admin/stats")
-        
-        // Log the full response
         console.log("🔍 Admin stats response status:", response.status)
         console.log("🔍 Admin stats response headers:", response.headers)
         console.log("🔍 Admin stats response data:", response.data)
-        
         return response.data
       } catch (error) {
         console.error("❌ Error fetching admin stats:", error)
@@ -40,7 +32,6 @@ export default function Dashboard() {
     }
   })
 
-  // Fetch case analytics
   const { data: caseAnalytics, isLoading: isLoadingAnalytics, error: analyticsError } = useQuery({
     queryKey: ['caseAnalytics'],
     queryFn: async () => {
@@ -56,7 +47,6 @@ export default function Dashboard() {
     }
   })
 
-  // Generate default activity data if none is provided by the backend
   const generateDefaultActivityData = () => {
     const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
     return days.map(day => ({
@@ -66,12 +56,10 @@ export default function Dashboard() {
     }))
   }
 
-  // Show loading state
   if (isLoadingStats || isLoadingAnalytics) {
     return <div className="flex justify-center items-center h-64">Loading dashboard data...</div>
   }
 
-  // Show error state
   if (statsError || analyticsError) {
     return (
       <div className="flex flex-col items-center justify-center h-64 space-y-4">
@@ -87,10 +75,8 @@ export default function Dashboard() {
     )
   }
 
-  // Colors for charts
   const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8', '#82ca9d']
   
-  // Prepare data for pie charts
   const caseStatusData = Object.entries(dashboardData?.casesByStatus || {}).map(([name, value]) => ({
     name,
     value
@@ -105,7 +91,6 @@ export default function Dashboard() {
     <div className="space-y-6">
       <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
       
-      {/* Stats Overview */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -160,7 +145,6 @@ export default function Dashboard() {
         </Card>
       </div>
 
-      {/* Tabs for different analytics views */}
       <Tabs defaultValue="overview" className="space-y-4">
         <TabsList>
           <TabsTrigger value="overview">Overview</TabsTrigger>
@@ -168,10 +152,8 @@ export default function Dashboard() {
           <TabsTrigger value="users">User Analytics</TabsTrigger>
         </TabsList>
         
-        {/* Overview Tab */}
         <TabsContent value="overview" className="space-y-4">
           <div className="grid gap-4 md:grid-cols-2">
-            {/* Recent Activity Chart */}
             <Card className="col-span-2">
               <CardHeader>
                 <CardTitle>Platform Activity</CardTitle>
@@ -201,7 +183,6 @@ export default function Dashboard() {
               </CardContent>
             </Card>
             
-            {/* Recent Cases */}
             <Card>
               <CardHeader>
                 <CardTitle>Recent Cases</CardTitle>
@@ -234,7 +215,6 @@ export default function Dashboard() {
               </CardContent>
             </Card>
             
-            {/* User Growth */}
             <Card>
               <CardHeader>
                 <CardTitle>User Growth</CardTitle>
@@ -261,10 +241,8 @@ export default function Dashboard() {
           </div>
         </TabsContent>
         
-        {/* Case Analytics Tab */}
         <TabsContent value="cases" className="space-y-4">
           <div className="grid gap-4 md:grid-cols-2">
-            {/* Cases by Status */}
             <Card>
               <CardHeader>
                 <CardTitle>Cases by Status</CardTitle>
@@ -293,7 +271,6 @@ export default function Dashboard() {
               </CardContent>
             </Card>
             
-            {/* Cases by Category */}
             <Card>
               <CardHeader>
                 <CardTitle>Cases by Category</CardTitle>
@@ -322,7 +299,6 @@ export default function Dashboard() {
               </CardContent>
             </Card>
             
-            {/* Form Usage */}
             <Card className="col-span-2">
               <CardHeader>
                 <CardTitle>Form Template Usage</CardTitle>
@@ -350,10 +326,8 @@ export default function Dashboard() {
           </div>
         </TabsContent>
         
-        {/* User Analytics Tab */}
         <TabsContent value="users" className="space-y-4">
           <div className="grid gap-4 md:grid-cols-2">
-            {/* User Role Distribution */}
             <Card>
               <CardHeader>
                 <CardTitle>User Role Distribution</CardTitle>
@@ -386,7 +360,6 @@ export default function Dashboard() {
               </CardContent>
             </Card>
             
-            {/* Lawyer Approval Status */}
             <Card>
               <CardHeader>
                 <CardTitle>Lawyer Approval Status</CardTitle>
@@ -417,7 +390,6 @@ export default function Dashboard() {
               </CardContent>
             </Card>
             
-            {/* User Activity */}
             <Card className="col-span-2">
               <CardHeader>
                 <CardTitle>User Activity</CardTitle>
