@@ -23,7 +23,8 @@ import ClientLawyerProfile from "./pages/client/clientLawyer.jsx";
 import Notification from "./pages/client/Notifications.jsx";
 
 import AppointmentsPage from "./pages/common/Appointments.jsx";
-import MessagePage from "./pages/common/MessagePage.jsx";
+import Messages from "./pages/common/Messages.jsx";
+// import MessagesPage from "./pages/common/MessagePage.jsx";
 
 import LawyerHome from "./pages/lawyer/LawyerHome.jsx";
 import CaseOnHandDetails from "./pages/lawyer/CaseOnHandDetails.jsx";
@@ -191,7 +192,15 @@ function AppRoutes() {
             path="/client/messages"
             element={
               <ProtectedRoute allowedRoles={["Client"]}>
-                <MessagePage />
+                <Messages />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/client/messages/:lawyerId"
+            element={
+              <ProtectedRoute allowedRoles={["Client"]}>
+                <Messages />
               </ProtectedRoute>
             }
           />
@@ -279,10 +288,18 @@ function AppRoutes() {
             path="/lawyer/messages"
             element={
               <ProtectedRoute allowedRoles={["Lawyer"]}>
-                <MessagePage />
+                <Messages />
               </ProtectedRoute>
             }
           />
+          <Route
+  path="/lawyer/messages/:lawyerId"
+  element={
+    <ProtectedRoute allowedRoles={["Lawyer"]}>
+      <Messages />
+    </ProtectedRoute>
+  }
+/>
           <Route
             path="/lawyer/profile/:lawyerId"
             element={
@@ -349,7 +366,6 @@ function AppRoutes() {
           <Route path="/faq" element={<FAQ />} />
           <Route path="/contact" element={<Contact />} />
           <Route path="*" element={<NotFound />} />
-         
         </Routes>
       </main>
       {!hideNavbarFooter && <Footer />}
@@ -366,18 +382,4 @@ function App() {
   );
 }
 
-
 export default App;
-
-
-
-
-
-
-
-
-
-
-
-
-

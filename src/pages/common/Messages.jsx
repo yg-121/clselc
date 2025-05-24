@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../../hooks/authHooks';
 import { useApi } from '../../hooks/useApi';
 import { chat } from '../../services/api';
@@ -16,6 +16,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 const Messages = () => {
   const { user: authUser, loading: authLoading } = useAuth();
   const { loading, callApi } = useApi();
+  const { lawyerId } = useParams();
   const [selectedUser, setSelectedUser] = useState('');
   const [message, setMessage] = useState('');
   const [file, setFile] = useState(null);
@@ -34,6 +35,12 @@ const Messages = () => {
       return;
     }
 
+    console.log('[Messages] AuthUser ID:', authUser._id, 'Token:', localStorage.getItem('token')?.slice(0, 10) + '...');
+
+    if (lawyerId && lawyerId !== selectedUser) {
+      setSelectedUser(lawyerId);
+    }
+
     const fetchRecentChats = async () => {
       try {
         const response = await callApi(() => chat.getChatHistory(authUser._id));
@@ -48,7 +55,8 @@ const Messages = () => {
         const recent = response.data.chats
           .map((chat) => {
             const otherUserId = chat.sender._id === authUser._id ? chat.receiver._id : chat.sender._id;
-            if (chat.receiver._id === authUser._id && !chat.read) {
+            const isUnread = chat.receiver._id === authUser._id && (chat.read ?? false) === false;
+            if (isUnread) {
               unread[otherUserId] = (unread[otherUserId] || 0) + 1;
             }
             return {
@@ -104,7 +112,7 @@ const Messages = () => {
           ];
           return updated.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
         });
-        if (msg.receiver._id === authUser._id && !msg.read && msg.sender._id !== selectedUser) {
+        if (msg.receiver._id === authUser._id && (msg.read ?? false) === false && msg.sender._id !== selectedUser) {
           setUnreadCounts((prev) => {
             const newCounts = {
               ...prev,
@@ -132,18 +140,29 @@ const Messages = () => {
         });
         toast.success('Chat deleted');
       });
+
+      socket.on('connect_error', (error) => {
+        console.error('[Messages] Socket connect error:', error.message);
+        toast.error('Failed to connect to real-time messaging. Messages will still be sent via HTTP.');
+      });
+    } else {
+      console.warn('[Messages] Socket initialization failed');
+      toast.error('Real-time messaging unavailable. Messages will still be sent via HTTP.');
     }
 
     return () => {
       socketService.off('new_message');
       socketService.off('chat_deleted');
+      socketService.off('connect_error');
     };
-  }, [authUser, authLoading, navigate]);
+  }, [authUser, authLoading, navigate, lawyerId]);
 
   useEffect(() => {
     if (!selectedUser || !authUser) return;
 
     const fetchChatHistory = async () => {
+      console.log('[Messages] chat service:', chat);
+      console.log('[Messages] markChatAsRead function:', chat.markChatAsRead);
       try {
         const response = await callApi(() => chat.getChatHistory(authUser._id));
         if (!response.success || !response.data?.chats) {
@@ -155,24 +174,27 @@ const Messages = () => {
         );
         setChatHistory(filteredChats);
 
-        // Auto-mark unread messages as read
         const unreadChats = filteredChats.filter(
-          (chat) => chat.receiver._id === authUser._id && !chat.read
+          (chat) => chat.receiver._id === authUser._id && (chat.read ?? false) === false
         );
         for (const chat of unreadChats) {
           try {
-            const readResponse = await callApi(() => chat.markChatAsRead(chat._id));
-            if (readResponse.success) {
-              setChatHistory((prev) =>
-                prev.map((c) => (c._id === chat._id ? { ...c, read: true } : c))
-              );
-              setUnreadCounts((prev) => {
-                const newCount = (prev[selectedUser] || 1) - 1;
-                const newCounts = { ...prev, [selectedUser]: newCount >= 0 ? newCount : 0 };
-                console.log('[Messages] Unread counts after mark as read:', newCounts);
-                return newCounts;
-              });
-            }
+            console.log('[Messages] Skipping markChatAsRead for chat:', chat._id);
+            // const readResponse = await callApi(() => chat.markChatAsRead(chat._id));
+            // if (readResponse.success) {
+            //   setChatHistory((prev) =>
+            //     prev.map((c) => (c._id === chat._id ? { ...c, read: true } : c))
+            //   );
+            //   setUnreadCounts((prev) => {
+            //     const newCount = (prev[selectedUser] || 0) - 1;
+            //     const newCounts = {
+            //       ...prev,
+            //       [selectedUser]: newCount >= 0 ? newCount : 0,
+            //     };
+            //     console.log('[Messages] Unread counts after mark as read:', newCounts);
+            //     return newCounts;
+            //   });
+            // }
           } catch (error) {
             console.error('[Messages] Auto-mark as read error:', error.response?.data || error.message);
           }
@@ -301,7 +323,6 @@ const Messages = () => {
 
   return (
     <div className="flex h-screen bg-gradient-to-b from-gray-50 to-gray-100">
-      {/* Sidebar */}
       <motion.div
         className="w-1/3 md:w-1/4 bg-white shadow-sm rounded-r-2xl"
         initial={{ x: -100, opacity: 0 }}
@@ -355,11 +376,9 @@ const Messages = () => {
         )}
       </motion.div>
 
-      {/* Chat Area */}
       <div className="flex-1 flex flex-col">
         {selectedUser ? (
           <>
-            {/* Chat Header */}
             <motion.div
               className="p-4 bg-white shadow-sm border-b border-gray-200 flex items-center justify-between"
               initial={{ y: -50, opacity: 0 }}
@@ -395,7 +414,6 @@ const Messages = () => {
               </DropdownMenu>
             </motion.div>
 
-            {/* Messages */}
             <div className="flex-1 p-4 overflow-y-auto bg-gradient-to-b from-gray-50 to-gray-100">
               {chatHistory.length === 0 ? (
                 <p className="text-gray-500 text-center mt-10">No messages yet</p>
@@ -419,7 +437,6 @@ const Messages = () => {
                             : 'bg-white text-gray-800 shadow-sm'
                         }`}
                       >
-                        {/* Message Tail */}
                         <div
                           className={`absolute bottom-0 w-3 h-3 ${
                             chat.sender._id === authUser._id
@@ -432,7 +449,6 @@ const Messages = () => {
                               : 'polygon(0 0, 100% 0, 0 100%)',
                           }}
                         />
-
                         {chat.message && <p>{chat.message}</p>}
                         {chat.fileUrl && (
                           <p>
@@ -469,15 +485,13 @@ const Messages = () => {
                           </p>
                         </motion.div>
                         {(chat.sender._id === authUser._id || chat.receiver._id === authUser._id) && (
-                          <motion.div whileHover={{ scale: 1.2 }} whileTap={{ scale: 0.9 }}>
-                            <Trash2
-                              className="absolute top-1 right-1 w-4 h-4 text-gray-400 hover:text-red-500 cursor-pointer"
-                              onClick={() => {
-                                setChatToDelete(chat._id);
-                                setDeleteDialogOpen(true);
-                              }}
-                            />
-                          </motion.div>
+                          <Trash2
+                            className="absolute top-1 right-1 w-4 h-4 text-gray-400 hover:scale-125 hover:text-red-500 cursor-pointer transition-transform duration-200"
+                            onClick={() => {
+                              setChatToDelete(chat._id);
+                              setDeleteDialogOpen(true);
+                            }}
+                          />
                         )}
                       </div>
                     </motion.div>
@@ -486,7 +500,6 @@ const Messages = () => {
               )}
             </div>
 
-            {/* Input Bar */}
             <motion.div
               className="p-3 bg-gray-100 shadow-inner border-t border-gray-200 sticky bottom-0"
               initial={{ y: 50, opacity: 0 }}
@@ -539,7 +552,6 @@ const Messages = () => {
         )}
       </div>
 
-      {/* Delete Dialog */}
       <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <DialogContent>
           <DialogHeader>

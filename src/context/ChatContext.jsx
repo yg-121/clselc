@@ -1,9 +1,9 @@
-
+"use client"
 
 import { createContext, useState, useEffect, useContext } from "react"
-import { useAuth } from "../hooks/authHooks1.jsx"
-import { useApi } from "../hooks/useApi1.jsx"
-import { chat } from "../services/api1.js"
+import { useAuth } from "../hooks/authHooks.js"
+import { useApi } from "../hooks/useApi.js"
+import { chat } from "../services/api.js"
 import { toast } from "react-hot-toast"
 
 export const ChatContext = createContext()
@@ -15,9 +15,6 @@ export const ChatProvider = ({ children }) => {
   const [chatState, setChatState] = useState({
     selectedUser: null,
     isBlocked: false,
-    getChatHistory: chat.getChatHistory,
-    sendMessage: chat.sendMessage,
-    sendMessageWithFile: chat.sendMessageWithFile,
   })
   const [chatHistory, setChatHistory] = useState([])
   const [recentChats, setRecentChats] = useState([])
@@ -29,7 +26,7 @@ export const ChatProvider = ({ children }) => {
 
     const fetchRecentChats = async () => {
       try {
-        const response = await callApi(() => chat.getChatHistory(authUser._id))
+        const response = await callApi(chat.getChatHistory, authUser._id)
         if (!response.success || !response.data?.chats) {
           setRecentChats([])
           setUnreadCounts({})
@@ -101,4 +98,10 @@ export const ChatProvider = ({ children }) => {
   return <ChatContext.Provider value={value}>{children}</ChatContext.Provider>
 }
 
-export const useChat = () => useContext(ChatContext)
+export const useChat = () => {
+  const context = useContext(ChatContext)
+  if (!context) {
+    throw new Error("useChat must be used within a ChatProvider")
+  }
+  return context
+}

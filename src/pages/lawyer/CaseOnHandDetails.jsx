@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
-import { AlertTriangle, X } from "lucide-react";
+import { AlertTriangle, X, MessageSquare } from "lucide-react";
 import CaseHeader from "../../components/case/CaseHeader";
 import TabsNavigation from "../../components/case/TabsNavigation";
 import TabContent from "../../components/case/TabContent";
@@ -164,7 +164,7 @@ export default function CaseOnHandDetails() {
       if (!token) throw new Error("Authentication token not found. Please log in.");
       
       const response = await fetch(
-        `http://localhost:5000/api/cases/${id}`, // Use id from useParams() instead of caseId
+        `http://localhost:5000/api/cases/${id}`,
         {
           method: "GET",
           headers: {
@@ -203,7 +203,6 @@ export default function CaseOnHandDetails() {
     setIsAddNoteModalOpen(true);
   };
 
-  // Add a direct note submission function
   const handleDirectNoteSubmit = async (noteData) => {
     if (!noteData || !noteData.content) return;
     
@@ -216,7 +215,7 @@ export default function CaseOnHandDetails() {
       if (!token) throw new Error("Authentication token not found. Please log in.");
       
       const response = await fetch(
-        `http://localhost:5000/api/cases/${id}/notes`, // Use id from useParams() instead of caseId
+        `http://localhost:5000/api/cases/${id}/notes`,
         {
           method: "POST",
           headers: {
@@ -238,7 +237,6 @@ export default function CaseOnHandDetails() {
       const data = await response.json();
       setAddNoteSuccess(data.message || "Note added successfully");
       
-      // Refresh case details to show the new note
       await refreshCaseDetails();
     } catch (err) {
       console.error("Error adding note:", err);
@@ -374,13 +372,22 @@ export default function CaseOnHandDetails() {
         error={rescheduleError}
         success={rescheduleSuccess}
       />
-      <div className="mt-6">
+      <div className="mt-6 flex gap-4">
         <Link
           to="/lawyer/lawyerCase"
           className="inline-flex items-center px-4 py-2 bg-gradient-to-r from-gray-700 to-gray-800 text-white rounded-lg shadow-md hover:from-gray-800 hover:to-gray-900 hover:scale-105 transition-all duration-300"
         >
           Back to Cases
         </Link>
+        {caseDetail?.client?._id && (
+          <Link
+            to={`/lawyer/messages/${caseDetail.client._id}`}
+            className="inline-flex items-center px-4 py-2 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-lg shadow-md hover:from-blue-600 hover:to-blue-700 hover:scale-105 transition-all duration-300"
+          >
+            <MessageSquare className="w-5 h-5 mr-2" />
+            Message Client
+          </Link>
+        )}
       </div>
     </div>
   );
